@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% set active = "query" %}
+
+{% block page_title %}Query{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-empty" id="chat-empty">
+      <h3>Ask anything about the Israeli cyber ecosystem</h3>
+      <p>Powered by Claude — queries the full 331-company database</p>
+      <div class="suggested-prompts">
+        <button class="suggested-prompt" onclick="sendSuggested(this)">Which funds led the most seed rounds in Israeli cyber in the last 18 months?</button>
+        <button class="suggested-prompt" onclick="sendSuggested(this)">Show me all AI Security companies that raised Series A in 2024–2025</button>
+        <button class="suggested-prompt" onclick="sendSuggested(this)">Which companies have 8200 founders and raised over $50M?</button>
+        <button class="suggested-prompt" onclick="sendSuggested(this)">Which companies align with Lama's Outcomes Playbook thesis?</button>
+        <button class="suggested-prompt" onclick="sendSuggested(this)">What's the median seed round size in Israeli cyber in 2025?</button>
+        <button class="suggested-prompt" onclick="sendSuggested(this)">Show me all exits and acquisitions in the last 2 years</button>
+        <button class="suggested-prompt" onclick="sendSuggested(this)">Who are the most active co-investors alongside CyberStarts?</button>
+        <button class="suggested-prompt" onclick="sendSuggested(this)">Which sectors have the most activity right now?</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-input-area">
+    <textarea id="chat-input" placeholder="Ask a question about the Israeli cyber ecosystem…" rows="1"
+      onkeydown="handleChatKey(event)" oninput="autoResize(this)"></textarea>
+    <button class="chat-send-btn" id="chat-send" onclick="sendMessage()">Send</button>
+    <button class="btn btn-ghost" onclick="clearChat()" title="Clear conversation">🗑</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/query_chat.js"></script>
+{% endblock %}

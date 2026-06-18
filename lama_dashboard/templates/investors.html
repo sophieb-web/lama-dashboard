@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% set active = "investors" %}
+
+{% block page_title %}Investors{% endblock %}
+
+{% block content %}
+<div class="filters-panel">
+  <div class="filter-group">
+    <label>Stage Focus</label>
+    <select id="filter-stage" onchange="applyInvestorFilters()">
+      <option value="">All Stages</option>
+      <option>Seed</option><option>Early</option><option>Growth</option><option>Multi-stage</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Sector Focus</label>
+    <select id="filter-sector" onchange="applyInvestorFilters()">
+      <option value="">All Sectors</option>
+      <option>AI Security</option><option>Cloud Security</option>
+      <option>Data Security</option><option>Identity & Access</option>
+      <option>Application Security</option><option>Supply Chain Security</option>
+      <option>Security Operations</option><option>Network Security</option>
+      <option>Endpoint & XDR</option><option>OT / ICS / IoT</option>
+      <option>GRC & Compliance</option><option>Threat Intelligence</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>&nbsp;</label>
+    <label class="filter-toggle">
+      <input type="checkbox" id="filter-lp" onchange="applyInvestorFilters()">
+      Lama LP Connected
+    </label>
+  </div>
+  <div class="filter-group">
+    <label>&nbsp;</label>
+    <button class="btn btn-ghost" onclick="resetInvestorFilters()">Reset</button>
+  </div>
+</div>
+
+<div class="card">
+  <div style="overflow-x:auto">
+    <table class="data-table" id="investors-table">
+      <thead>
+        <tr>
+          <th onclick="sortInvestors('portfolio_count')" data-col="portfolio_count"># <span class="sort-arrow">↕</span></th>
+          <th onclick="sortInvestors('name')" data-col="name">Investor <span class="sort-arrow">↕</span></th>
+          <th onclick="sortInvestors('portfolio_count')" data-col="portfolio_count">Companies <span class="sort-arrow">↕</span></th>
+          <th onclick="sortInvestors('lead_count')" data-col="lead_count">Leads <span class="sort-arrow">↕</span></th>
+          <th onclick="sortInvestors('total_deployed')" data-col="total_deployed">Deployed ($M) <span class="sort-arrow">↕</span></th>
+          <th>Stage Focus</th>
+          <th>Top Sectors</th>
+          <th>Most Recent Deal</th>
+          <th>LP?</th>
+        </tr>
+      </thead>
+      <tbody id="investors-tbody">
+        <tr><td colspan="9" class="loading-overlay"><div class="spinner"></div> Loading investors…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination" id="investor-pagination"></div>
+</div>
+
+<!-- Investor profile panel (reuses company panel structure) -->
+<div class="panel-overlay" id="investor-overlay" onclick="closeInvestorPanel()"></div>
+<div class="company-panel" id="investor-panel">
+  <div class="panel-header">
+    <button class="panel-close" onclick="closeInvestorPanel()">✕</button>
+    <div class="panel-company-name" id="inv-panel-name"></div>
+    <div class="panel-meta" id="inv-panel-meta"></div>
+    <div class="panel-badges" id="inv-panel-badges"></div>
+  </div>
+  <div class="investor-panel" id="inv-panel-body"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/investors_table.js"></script>
+{% endblock %}

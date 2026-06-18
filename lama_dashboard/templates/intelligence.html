@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% set active = "intelligence" %}
+
+{% block page_title %}Intelligence{% endblock %}
+
+{% block content %}
+
+<!-- A: Ecosystem Stats -->
+<div class="intel-section">
+  <h2>📈 Ecosystem Funding Trends</h2>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Total Funding by Year ($M)</h3>
+      <div class="chart-container"><canvas id="chart-funding-year"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Deal Count by Year</h3>
+      <div class="chart-container"><canvas id="chart-deals-year"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Capital by Sector ($M)</h3>
+      <div class="chart-container"><canvas id="chart-sector-capital"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Companies by Sector</h3>
+      <div class="chart-container"><canvas id="chart-sector-count"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- B: Hot Categories -->
+<div class="intel-section">
+  <h2>🔥 Hot Categories</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header">Most Active (Seed, last 18mo)</div>
+      <div class="card-body" style="padding:0">
+        <table class="hot-table" id="hot-seed"></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Highest Median Round ($M)</div>
+      <div class="card-body" style="padding:0">
+        <table class="hot-table" id="hot-median"></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Fastest Growing (company count)</div>
+      <div class="card-body" style="padding:0">
+        <table class="hot-table" id="hot-growth"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- C: 8200 Network -->
+<div class="intel-section">
+  <h2>🎖️ Unit 8200 Network</h2>
+  <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px">
+    <div>
+      <div class="stats-row" style="flex-direction:column;gap:12px">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-8200-count">—</div>
+          <div class="stat-label">8200-Founded Companies</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-8200-pct">—</div>
+          <div class="stat-label">% of All Companies</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-8200-raised">—</div>
+          <div class="stat-label">Total Raised by 8200 Cos</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">8200 Concentration by Sector</div>
+      <div class="chart-container" style="padding:16px;height:200px"><canvas id="chart-8200-sector"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- D: Exit Landscape -->
+<div class="intel-section">
+  <h2>🏆 Exit Landscape</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header">Acquisitions by Acquirer</div>
+      <div class="card-body" style="padding:0">
+        <table class="hot-table" id="exit-acquirers"></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Recent Notable Exits</div>
+      <div class="card-body" style="padding:0">
+        <table class="hot-table" id="exit-recent"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- E: Investor Activity -->
+<div class="intel-section">
+  <h2>💼 Investor Activity</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header">Most Active Lead Investors (Last 18mo)</div>
+      <div class="card-body" style="padding:0">
+        <table class="hot-table" id="active-investors"></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Top Co-investors</div>
+      <div class="card-body" style="padding:0">
+        <table class="hot-table" id="top-coinvestors"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const YEARLY_FUNDING = {{ stats.yearly_funding | tojson }};
+  const SECTOR_BREAKDOWN = {{ stats.sector_breakdown | tojson }};
+  const SECTOR_COLORS_MAP = {{ stats.sector_colors | tojson }};
+  const STATS = {{ stats | tojson }};
+</script>
+<script src="/static/js/charts.js"></script>
+{% endblock %}

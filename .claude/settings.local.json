@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(python -c \"import pandas; import flask; print\\('OK'\\)\")",
+      "Bash(python -c \"from data_loader import load_data; companies = load_data\\(\\); print\\(f'Companies: {len\\(companies\\)}'\\)\")",
+      "Bash(python app.py)",
+      "Bash(curl -s http://localhost:5000/api/stats)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Companies: {d[\\\\\"total_companies\\\\\"]}, Capital: \\\\${d[\\\\\"total_raised_b\\\\\"]}B, Unicorns: {d[\\\\\"unicorn_count\\\\\"]}'\\)\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Owner\\\\Downloads\\\\Dashboard Working Directory\\\\.claude\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(taskkill /PID 33412 /F)",
+      "PowerShell(Stop-Process -Id 33412 -Force -ErrorAction SilentlyContinue)",
+      "Bash(curl -s http://localhost:5000/)",
+      "Bash(curl -s http://localhost:5000/companies)",
+      "Bash(curl -s http://localhost:5000/investors)",
+      "Bash(curl -s http://localhost:5000/intelligence)",
+      "Bash(curl -s http://localhost:5000/query)",
+      "Bash(curl -s \"http://localhost:5000/api/investors\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Investors: {len\\(d\\)}, Top 3: {[i[\\\\\"name\\\\\"]+\\\\\" \\(\\\\\"+str\\(i[\\\\\"portfolio_count\\\\\"]\\)+\\\\\"\\)\\\\\" for i in d[:3]]}'\\)\")",
+      "Bash(curl -s \"http://localhost:5000/api/companies/Wiz\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Name: {d[\\\\\"name\\\\\"]}, Sector: {d[\\\\\"sector\\\\\"]}, Raised: \\\\${d[\\\\\"total_raised\\\\\"]}M, Stage: {d[\\\\\"stage\\\\\"]}, Deals: {len\\(d[\\\\\"deals\\\\\"]\\)}'\\)\")",
+      "Bash(python -c ' *)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5000 -State Listen | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 1; Write-Output \"killed\")"
+    ]
+  }
+}

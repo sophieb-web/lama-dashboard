@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% set active = "map" %}
+
+{% block page_title %}Ecosystem Map{% endblock %}
+
+{% block content %}
+<!-- Stats row -->
+<div class="stats-row" id="stats-row">
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.total_companies }}</div>
+    <div class="stat-label">Total Companies</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">485</div>
+    <div class="stat-label">Total Deals</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">${{ stats.total_raised_b }}B</div>
+    <div class="stat-label">Total Capital Raised</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.unicorn_count }}</div>
+    <div class="stat-label">Unicorns ($1B+)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.acquired_count }}</div>
+    <div class="stat-label">Acquisitions</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.eight200_pct }}%</div>
+    <div class="stat-label">8200-Founded</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.portfolio_count }}</div>
+    <div class="stat-label">Lama Portfolio</div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filters-panel">
+  <div class="filter-group">
+    <label>Sector</label>
+    <select id="filter-sector" onchange="applyMapFilters()">
+      <option value="">All Sectors</option>
+      {% for sector in stats.sector_colors.keys() %}
+      <option value="{{ sector }}">{{ sector }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Stage</label>
+    <select id="filter-stage" onchange="applyMapFilters()">
+      <option value="">All Stages</option>
+      <option value="Seed">Seed</option>
+      <option value="Series A">Series A</option>
+      <option value="Series B">Series B</option>
+      <option value="Series C+">Series C+</option>
+      <option value="Series D+">Series D+</option>
+      <option value="Acquired">Acquired</option>
+      <option value="Public">Public</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Founded After</label>
+    <select id="filter-year" onchange="applyMapFilters()">
+      <option value="">Any Year</option>
+      {% for y in range(2010, 2027) %}
+      <option value="{{ y }}">{{ y }}+</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Military Unit</label>
+    <select id="filter-military" onchange="applyMapFilters()">
+      <option value="">All</option>
+      <option value="8200">Unit 8200</option>
+      <option value="Matzov">Matzov</option>
+      <option value="Unit 81">Unit 81</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>&nbsp;</label>
+    <label class="filter-toggle">
+      <input type="checkbox" id="filter-portfolio" onchange="applyMapFilters()">
+      Lama Portfolio Only
+    </label>
+  </div>
+  <div class="filter-group">
+    <label>&nbsp;</label>
+    <button class="btn btn-ghost" onclick="resetMapFilters()">Reset Filters</button>
+  </div>
+</div>
+
+<!-- Bubble map -->
+<div id="bubble-map-container">
+  <svg id="bubble-map"></svg>
+  <div class="bubble-legend" id="bubble-legend"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const SECTOR_COLORS = {{ sector_colors | tojson }};
+</script>
+<script src="/static/js/bubble_map.js"></script>
+{% endblock %}

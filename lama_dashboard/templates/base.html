@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Lama Partners — Israeli Cyber Ecosystem{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="wordmark">Lama Partners</div>
+    <div class="sub">Israeli Cyber Ecosystem</div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="/" class="{% if active == 'map' %}active{% endif %}">
+      <span class="nav-icon">🗺️</span> Ecosystem Map
+    </a>
+    <a href="/companies" class="{% if active == 'companies' %}active{% endif %}">
+      <span class="nav-icon">🏢</span> Companies
+    </a>
+    <a href="/deals" class="{% if active == 'deals' %}active{% endif %}">
+      <span class="nav-icon">📋</span> Deals
+    </a>
+    <a href="/investors" class="{% if active == 'investors' %}active{% endif %}">
+      <span class="nav-icon">💼</span> Investors
+    </a>
+    <a href="/intelligence" class="{% if active == 'intelligence' %}active{% endif %}">
+      <span class="nav-icon">📊</span> Intelligence
+    </a>
+    <a href="/query" class="{% if active == 'query' %}active{% endif %}">
+      <span class="nav-icon">💬</span> Query
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    331 companies<br>485 deals<br>Jun 2026
+  </div>
+</aside>
+
+<!-- Main content -->
+<div class="main">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-title">{% block page_title %}{% endblock %}</div>
+    <div class="topbar-search">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="global-search" placeholder="Search companies…" autocomplete="off">
+    </div>
+    <div class="filter-chips" id="active-filter-chips"></div>
+  </div>
+
+  <!-- Page content -->
+  <div class="page-content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<!-- Company Profile Panel -->
+<div class="panel-overlay" id="panel-overlay" onclick="closePanel()"></div>
+<div class="company-panel" id="company-panel">
+  <div class="panel-header">
+    <button class="panel-close" onclick="closePanel()">✕</button>
+    <div class="panel-company-name" id="panel-name"></div>
+    <div class="panel-meta" id="panel-meta"></div>
+    <div class="panel-badges" id="panel-badges"></div>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+</div>
+
+<!-- Bubble tooltip -->
+<div class="bubble-tooltip" id="bubble-tooltip"></div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

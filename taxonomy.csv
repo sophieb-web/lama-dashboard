@@ -1,0 +1,14 @@
+﻿Israeli Cyber Sector Taxonomy — Lama Partners | June 2026,,,
+#,Sector Tag,Description,Example Companies
+1,AI Security,"Securing AI systems, agents, LLMs, model deployments, prompt injection, AI governance.","Zenity, Aim Security, Capsule, Onyx, Pillar Security, Twine Security, Zenyard, DeepKeep, Adversa AI"
+2,Cloud Security,"CSPM, CWPP, CNAPP, cloud posture, cloud workload protection, cloud detection & response.","Wiz, Cyera, Vega, Axonius, Sweet Security, Native, Ktrust, Aryon Security, Blast Security"
+3,Data Security,"DLP, DSPM, data governance, data access control, privacy-preserving tech, data lineage.","Orion, Cyera, Laminar, Dig Security, Mine, Jazz, Normalyze, Eureka Security, Satori"
+4,Identity & Access,"IAM, PAM, zero trust, CIEM, non-human identity (NHI), workforce identity, MFA.","Venice, Silverfort, Semperis, CyberArk, Grip Security, Astrix Security, Clutch, Descope, Acsense"
+5,Application Security,"AppSec, DevSecOps, SAST/DAST, API security, ASPM, vulnerability management in CI/CD.","Jit, Salt Security, Noname Security, Bionic, Miggo, Seemplicity, Kodem, Remedio, Breeze Security"
+6,Supply Chain Security,"Software supply chain, SCA, open source security, IDE extensions, package integrity.","Root, KOI, Endor Labs, Legit Security, Ox Security, Oligo Security, Backslash Security, Cybord"
+7,Security Operations,"SOC, SIEM, SOAR, XDR, MDR, threat detection & response, SOC hyperautomation, agentic SOC.","Torq, Hunters, Vega, Mars Security, Andesite, DREAM, Alice, Avalor, CardinalOps, Daylight."
+8,Network Security,"NDR, microsegmentation, SASE, SD-WAN, network access control, DDoS, zero trust networking.","Zero Networks, Cato Networks, Zeroport, MazeBolt, IO River, CyberRidge, Cyber 2.0, Port0"
+9,Endpoint & XDR,"EDR, XDR, endpoint protection, mobile security, enterprise browser security.","Island, LayerX, Talon Security, Seraphic Security, Legion, Red Access, Cyngular Security"
+10,OT / ICS / IoT,"Industrial cybersecurity, SCADA/ICS, automotive cyber, IoT device security, OT monitoring.","Claroty, Armis, Upstream, Cyviation, IXDen, SecuriThings, Saiflow, OTOPIQ Security"
+11,GRC & Compliance,"Cyber risk quantification, compliance automation, audit, regulatory compliance, TPRM.","Kovrr, Safe Security, Cynomi, Panorays, Anecdotes, Cypago, Auditty, Creednz, Hypernative"
+12,Threat Intelligence,"Threat intel, dark web monitoring, vulnerability research, OSINT, brand protection, disinformation.","KELA Cyber, Recorded Future, Cyabra, Corsound AI"

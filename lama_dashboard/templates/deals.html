@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% set active = "deals" %}
+
+{% block page_title %}Deals{% endblock %}
+
+{% block content %}
+<div class="filters-panel">
+  <div class="filter-group">
+    <label>Round Type</label>
+    <select id="filter-round" onchange="applyDealFilters()">
+      <option value="">All Rounds</option>
+      <option>Seed</option>
+      <option>Early Stage VC</option>
+      <option>Later Stage VC</option>
+      <option>Series A</option>
+      <option>Series B</option>
+      <option>Series C</option>
+      <option>Series D</option>
+      <option>Growth</option>
+      <option>Accelerator</option>
+      <option>IPO/Public</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Sector</label>
+    <select id="filter-sector" onchange="applyDealFilters()">
+      <option value="">All Sectors</option>
+      <option>AI Security</option><option>Cloud Security</option>
+      <option>Data Security</option><option>Identity & Access</option>
+      <option>Application Security</option><option>Supply Chain Security</option>
+      <option>Security Operations</option><option>Network Security</option>
+      <option>Endpoint & XDR</option><option>OT / ICS / IoT</option>
+      <option>GRC & Compliance</option><option>Threat Intelligence</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Year</label>
+    <select id="filter-year" onchange="applyDealFilters()">
+      <option value="">Any Year</option>
+      {% for y in range(2026, 2014, -1) %}
+      <option value="{{ y }}">{{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Min Size ($M)</label>
+    <select id="filter-minsize" onchange="applyDealFilters()">
+      <option value="">Any Size</option>
+      <option value="1">$1M+</option>
+      <option value="5">$5M+</option>
+      <option value="10">$10M+</option>
+      <option value="25">$25M+</option>
+      <option value="50">$50M+</option>
+      <option value="100">$100M+</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>&nbsp;</label>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" onclick="resetDealFilters()">Reset</button>
+      <button class="btn btn-secondary" onclick="exportDealsCSV()">⬇ Export CSV</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div style="overflow-x:auto">
+    <table class="data-table" id="deals-table">
+      <thead>
+        <tr>
+          <th onclick="sortDeals('company')" data-col="company">Company <span class="sort-arrow">↕</span></th>
+          <th onclick="sortDeals('sector')" data-col="sector">Sector <span class="sort-arrow">↕</span></th>
+          <th onclick="sortDeals('round_type')" data-col="round_type">Round <span class="sort-arrow">↕</span></th>
+          <th onclick="sortDeals('round_date')" data-col="round_date">Date <span class="sort-arrow">↕</span></th>
+          <th onclick="sortDeals('round_size')" data-col="round_size">Size ($M) <span class="sort-arrow">↕</span></th>
+          <th onclick="sortDeals('lead_investor')" data-col="lead_investor">Lead Investor <span class="sort-arrow">↕</span></th>
+          <th>Co-Investors</th>
+          <th onclick="sortDeals('round_valuation')" data-col="round_valuation">Valuation ($M) <span class="sort-arrow">↕</span></th>
+          <th>Portfolio?</th>
+        </tr>
+      </thead>
+      <tbody id="deals-tbody">
+        <tr><td colspan="9" class="loading-overlay"><div class="spinner"></div> Loading deals…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination" id="deals-pagination"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/deals_table.js"></script>
+{% endblock %}
