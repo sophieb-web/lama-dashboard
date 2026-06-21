@@ -10,7 +10,7 @@ EXCEL_FILE = "data/Lama_Israeli_Cyber_Deal_Database_v8.xlsx"
 LAMA_PORTFOLIO = {"Terra", "Orion Security", "Root", "Capsule", "Jit"}
 
 SECTOR_COLORS = {
-    "AI Security": "#8B5CF6",
+    "AI Security": "#E11D48",
     "Cloud Security": "#0EA5E9",
     "Data Security": "#10B981",
     "Identity & Access": "#F59E0B",
@@ -21,7 +21,7 @@ SECTOR_COLORS = {
     "Endpoint & XDR": "#F97316",
     "OT / ICS / IoT": "#EC4899",
     "GRC & Compliance": "#14B8A6",
-    "Threat Intelligence": "#A78BFA",
+    "Threat Intelligence": "#D97706",
 }
 
 # Investor name normalization map
