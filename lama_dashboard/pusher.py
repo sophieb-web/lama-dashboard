@@ -21,6 +21,7 @@ def push_to_github(summary=None):
 
     token = os.environ.get("GITHUB_TOKEN", "")
     repo_name = os.environ.get("GITHUB_REPO", "sophieb-web/lama-dashboard")
+    target_branch = os.environ.get("GITHUB_BRANCH", "main")
 
     # Repo root is two levels up from lama_dashboard/
     lama_dir = os.path.dirname(os.path.abspath(__file__))
@@ -30,11 +31,32 @@ def push_to_github(summary=None):
 
     try:
         repo = git.Repo(repo_root)
-        _log(f"Git repo: {repo.working_dir} | branch: {repo.active_branch.name}")
     except git.InvalidGitRepositoryError:
         msg = f"No git repo found at {repo_root}"
         _log(msg)
         return {"success": False, "message": msg}
+
+    # Log HEAD state — Railway often deploys in detached HEAD
+    try:
+        branch_name = repo.active_branch.name
+        _log(f"Git branch: {branch_name}")
+    except TypeError:
+        branch_name = None
+        head_sha = repo.head.commit.hexsha[:8]
+        _log(f"Git HEAD: detached at {head_sha} — will push to {target_branch}")
+
+    # Ensure git user is configured (required for commit on Railway)
+    with repo.config_writer() as cw:
+        try:
+            cw.get_value("user", "name")
+        except Exception:
+            cw.set_value("user", "name", "Lama Dashboard Bot")
+            _log("Set git user.name = Lama Dashboard Bot")
+        try:
+            cw.get_value("user", "email")
+        except Exception:
+            cw.set_value("user", "email", "bot@lama.vc")
+            _log("Set git user.email = bot@lama.vc")
 
     # Always use forward slashes — git/gitpython require POSIX paths
     files_to_add = [
@@ -43,7 +65,6 @@ def push_to_github(summary=None):
         "lama_dashboard/data/staging.json",
     ]
 
-    # Only add files that exist on disk
     existing = [f for f in files_to_add
                 if os.path.exists(os.path.join(repo_root, f.replace("/", os.sep)))]
     _log(f"Files to stage: {existing}")
@@ -56,7 +77,6 @@ def push_to_github(summary=None):
     repo.index.add(existing)
     _log(f"Staged {len(existing)} file(s)")
 
-    # Check if anything actually changed vs HEAD
     staged_diff = repo.index.diff("HEAD")
     _log(f"Staged diff count: {len(staged_diff)}")
     if not staged_diff:
@@ -65,7 +85,7 @@ def push_to_github(summary=None):
         return {"success": True, "message": msg}
 
     # Build commit message
-    if summary:
+    if summary and summary.get("merged", 0) > 0:
         msg = (f"auto-update: {summary.get('new_rounds', 0)} new rounds, "
                f"{summary.get('new_companies', 0)} new companies — {date.today()}")
     else:
@@ -76,17 +96,27 @@ def push_to_github(summary=None):
 
     # Set authenticated remote URL
     origin = repo.remote(name="origin")
-    _log(f"Remote origin: {origin.url if not token else '<token-auth>'}")
     if token:
         remote_url = f"https://{token}@github.com/{repo_name}.git"
         origin.set_url(remote_url)
-        _log(f"Set remote URL: https://***@github.com/{repo_name}.git")
+        _log(f"Set remote URL with token: https://***@github.com/{repo_name}.git")
+    else:
+        _log(f"WARNING: GITHUB_TOKEN not set — push may fail. Remote: {origin.url}")
 
+    # Push with explicit refspec so detached HEAD works
+    refspec = f"HEAD:{target_branch}"
+    _log(f"Pushing with refspec: {refspec}")
     try:
-        _log("Pushing to origin...")
-        origin.push()
+        push_info = origin.push(refspec=refspec)
+        # Check for errors in push_info flags
+        for info in push_info:
+            _log(f"Push info: {info.summary.strip()} (flags={info.flags})")
+            if info.flags & info.ERROR:
+                msg = f"Push error: {info.summary.strip()}"
+                _log(msg)
+                return {"success": False, "message": msg}
         result = {"success": True, "message": f"Pushed: {msg}"}
-        _log(f"Push successful")
+        _log("Push successful")
         return result
     except Exception as e:
         msg = f"Push failed: {e}. Check GITHUB_TOKEN in Railway Variables."
