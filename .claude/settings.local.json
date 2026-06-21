@@ -24,7 +24,10 @@
       "PowerShell(Get-NetTCPConnection -LocalPort 5000 -State Listen | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 1; Write-Output \"killed\")",
       "Bash(pip show *)",
       "Bash(find \"C:/Users/Owner/Downloads/Dashboard Working Directory\" -not -path \"*/\\\\.*\" -not -path \"*/__pycache__/*\")",
-      "Bash(python -c \"import staging; print\\(staging.get_stats\\(\\)\\)\")"
+      "Bash(python -c \"import staging; print\\(staging.get_stats\\(\\)\\)\")",
+      "Bash(python scraper.py)",
+      "Bash(python -c \"import sys; [print\\(l\\) for l in sys.stdin.read\\(\\).splitlines\\(\\)]\")",
+      "Bash(python -c \"import sys;[print\\(l\\) for l in sys.stdin.read\\(\\).splitlines\\(\\)]\")"
     ]
   }
 }

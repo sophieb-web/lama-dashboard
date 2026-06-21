@@ -1,6 +1,7 @@
 """
-Pure HTTP + HTML scraper — no AI, no Anthropic API.
-Checks CTech, TechCrunch, Geektime, SecurityWeek for Israeli cyber funding news.
+RSS-based scraper — no browser automation, no bot-blocking issues.
+Reads TechCrunch Security and SecurityWeek RSS feeds; filters for
+Israeli cybersecurity funding articles.
 """
 
 import hashlib
@@ -8,9 +9,10 @@ import os
 import re
 import time
 from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
+from xml.etree import ElementTree as ET
 
 import requests
-from bs4 import BeautifulSoup
 
 import staging
 
@@ -22,16 +24,31 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "en-US,en;q=0.9",
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
 }
 
-TIMEOUT = 10
-DELAY = 2.5  # seconds between requests
+TIMEOUT = 15
+DELAY = 1.5  # seconds between feed fetches
 
-CYBER_KEYWORDS = [
-    "cybersecurity", "cyber security", "cyber", "security",
-    "raises", "raised", "funding", "round", "series", "seed",
-    "million", "$", "invest",
+# RSS feeds — plain XML, no bot-blocking
+# require_israel=False for Israeli outlets where all articles are implicitly Israeli
+RSS_FEEDS = [
+    {
+        "name": "TechCrunch Security",
+        "url": "https://techcrunch.com/category/security/feed/",
+        "require_israel": True,
+    },
+    {
+        "name": "SecurityWeek",
+        "url": "https://www.securityweek.com/feed/",
+        "require_israel": True,
+    },
+    {
+        "name": "Globes",
+        "url": "https://en.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1725",
+        "require_israel": False,  # Israeli outlet — all articles are Israeli
+        "encoding": "utf-8-sig",  # has BOM
+    },
 ]
 
 ROUND_PATTERNS = {
@@ -56,14 +73,65 @@ def _log(msg):
     print(line)
 
 
-def _get(url):
+def _get_rss(url, encoding=None):
     try:
         r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
         r.raise_for_status()
-        return r
+        if encoding:
+            return r.content.decode(encoding, errors="replace")
+        return r.content.decode("utf-8", errors="replace")
     except Exception as e:
-        _log(f"  ⚠ Request failed for {url}: {e}")
+        _log(f"  ⚠ RSS fetch failed for {url}: {e}")
         return None
+
+
+def _parse_rss_items(xml_text):
+    """Return list of dicts with title, description, link, pub_date."""
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as e:
+        _log(f"  ⚠ XML parse error: {e}")
+        return []
+
+    items = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        desc = re.sub(r"<[^>]+>", " ", item.findtext("description") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        pub_raw = (item.findtext("pubDate") or "").strip()
+
+        # Parse RFC 822 date → ISO string
+        pub_date = ""
+        if pub_raw:
+            try:
+                pub_date = parsedate_to_datetime(pub_raw).strftime("%Y-%m-%d")
+            except Exception:
+                pass
+
+        items.append({
+            "title": title,
+            "description": desc,
+            "link": link,
+            "pub_date": pub_date,
+        })
+    return items
+
+
+def _is_relevant(title, description="", require_israel=True):
+    """Filter for funding + cyber articles. Israel check optional for Israeli outlets."""
+    combined = (title + " " + description).lower()
+    has_israel = any(w in combined for w in ["israel", "israeli", "tel aviv", "haifa"])
+    has_money = any(w in combined for w in [
+        "raises", "raised", "funding", "round", "series", "seed",
+        "million", "$", "invest", "secures", "closes",
+    ])
+    has_cyber = any(w in combined for w in [
+        "cyber", "security", "infosec", "ransomware", "threat", "cloud security",
+        "nso", "defense tech", "defensetech",
+    ])
+    if require_israel:
+        return has_israel and has_money and has_cyber
+    return has_money and has_cyber
 
 
 def _extract_amount(text):
@@ -85,24 +153,47 @@ def _extract_round_type(text):
     return None
 
 
+def _extract_company_from_headline(headline):
+    """
+    Heuristics for patterns like:
+      "CompanyName Raises $XM in Series A"
+      "Israeli CompanyName Secures $XM"
+      "CompanyName, a cybersecurity startup, raises..."
+    """
+    # Strip leading nationality/descriptor prefixes (loop until stable)
+    PREFIX_RE = re.compile(
+        r"^(Israeli|Israel.based|Tel Aviv.based|Israeli.founded"
+        r"|startup|cyber|cybersecurity"
+        r"|offensive security co|security co"
+        r"|tech company|firm)\s+",
+        re.IGNORECASE,
+    )
+    for _ in range(5):
+        stripped = PREFIX_RE.sub("", headline)
+        if stripped == headline:
+            break
+        headline = stripped
+
+    m = re.match(
+        r"^([A-Z][A-Za-z0-9\.\-\s]{1,35}?)\s+"
+        r"(raises?|secures?|gets?|closes?|announces?|lands?|nets?|bags?|"
+        r"receives?|completes?|clinches?|wins?)\b",
+        headline, re.IGNORECASE,
+    )
+    if m:
+        return m.group(1).strip()
+
+    m2 = re.match(r"^([A-Z][A-Za-z0-9\.\-\s]{1,35}?),\s+a\b", headline)
+    if m2:
+        return m2.group(1).strip()
+
+    return None
+
+
 def _make_id(source, company, date_str):
     raw = f"{source}|{company.lower().strip()}|{date_str}"
     return hashlib.md5(raw.encode()).hexdigest()[:16]
 
-
-def _is_relevant(text):
-    text_lower = text.lower()
-    has_israel = "israel" in text_lower or "tel aviv" in text_lower or "israeli" in text_lower
-    has_cyber = any(k in text_lower for k in CYBER_KEYWORDS[:6])
-    has_money = "$" in text or "million" in text_lower or "funding" in text_lower
-    return has_israel and (has_cyber or has_money)
-
-
-def _days_ago(n):
-    return datetime.now(timezone.utc) - timedelta(days=n)
-
-
-# ── Load existing DB company names for cross-reference ───────────────────────
 
 def _load_db_companies():
     try:
@@ -120,32 +211,27 @@ def _fuzzy_match(name, db_names):
     try:
         from rapidfuzz import fuzz
         name_lower = name.lower().strip()
-        best_score = 0
-        best_match = None
+        best_score, best_match = 0, None
         for db_name in db_names:
             score = fuzz.ratio(name_lower, db_name.lower().strip())
             if score > best_score:
-                best_score = score
-                best_match = db_name
-        if best_score >= 85:
-            return best_match
-        return None
+                best_score, best_match = score, db_name
+        return best_match if best_score >= 85 else None
     except ImportError:
-        # Fallback: exact match
         for db_name in db_names:
             if name.lower().strip() == db_name.lower().strip():
                 return db_name
         return None
 
 
-def _already_in_db(company, round_type, round_date, db_companies):
-    """Check staging.json to avoid re-staging known duplicates."""
+def _already_staged(company, round_type, round_date):
+    """Check staging.json to avoid re-staging duplicates."""
     data = staging.load_staging()
     all_staged = data["pending"] + data["approved"] + data["rejected"] + data["pushed"]
     for f in all_staged:
-        if (f.get("company_name", "").lower() == company.lower() and
-                f["data"].get("round_type") == round_type and
-                f["data"].get("round_date") == round_date):
+        if (f.get("company_name", "").lower() == company.lower()
+                and f["data"].get("round_type") == round_type
+                and f["data"].get("round_date") == round_date):
             return True
     return False
 
@@ -154,7 +240,8 @@ def _build_finding(source_name, company_name, headline, url, round_type,
                    round_date, round_size, lead_investor, co_investors,
                    ftype, db_match):
     fid = _make_id(source_name, company_name, round_date or headline[:20])
-    is_portfolio = company_name in LAMA_PORTFOLIO or (db_match and db_match in LAMA_PORTFOLIO)
+    is_portfolio = (company_name in LAMA_PORTFOLIO
+                    or (db_match and db_match in LAMA_PORTFOLIO))
     return {
         "id": fid,
         "type": ftype,
@@ -177,285 +264,123 @@ def _build_finding(source_name, company_name, headline, url, round_type,
     }
 
 
-# ── Source scrapers ───────────────────────────────────────────────────────────
+def _scrape_feed(feed, db_names):
+    """Fetch one RSS feed and return list of findings."""
+    name = feed["name"]
+    url = feed["url"]
+    require_israel = feed.get("require_israel", True)
+    encoding = feed.get("encoding", None)
+    _log(f"  Fetching {name}: {url}")
 
-def _scrape_techcrunch(db_names):
-    findings = []
-    urls = [
-        "https://techcrunch.com/search/?q=israel+cybersecurity",
-        "https://techcrunch.com/search/?q=israel+cyber+funding",
-    ]
-    for url in urls:
-        _log(f"  Fetching TechCrunch: {url}")
-        r = _get(url)
-        if not r:
-            continue
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        # TechCrunch search results
-        articles = soup.select("article, .post-block, [class*='article']")
-        if not articles:
-            articles = soup.select("h2 a, h3 a")
-
-        for article in articles[:15]:
-            try:
-                if hasattr(article, "select_one"):
-                    link_el = article.select_one("a[href]")
-                    title_el = article.select_one("h2, h3, .post-block__title")
-                    title = title_el.get_text(strip=True) if title_el else ""
-                    href = link_el["href"] if link_el else ""
-                else:
-                    title = article.get_text(strip=True)
-                    href = article.get("href", "")
-
-                if not title or not _is_relevant(title):
-                    continue
-
-                amount = _extract_amount(title)
-                rtype = _extract_round_type(title)
-                company = _extract_company_from_headline(title)
-                if not company:
-                    continue
-
-                db_match = _fuzzy_match(company, db_names)
-                if _already_in_db(company, rtype, "", db_names):
-                    continue
-
-                findings.append(_build_finding(
-                    "TechCrunch", company, title, href,
-                    rtype, "", amount, "", "", "new_round", db_match
-                ))
-            except Exception:
-                continue
-        time.sleep(DELAY)
-    _log(f"  TechCrunch: found {len(findings)} candidate(s)")
-    return findings
-
-
-def _scrape_geektime(db_names):
-    findings = []
-    url = "https://www.geektime.com/?s=cybersecurity+funding+israel"
-    _log(f"  Fetching Geektime: {url}")
-    r = _get(url)
-    if not r:
-        _log("  Geektime: no response")
+    xml_text = _get_rss(url, encoding=encoding)
+    if not xml_text:
         return []
 
-    soup = BeautifulSoup(r.text, "html.parser")
-    articles = soup.select("article h2 a, .post h2 a, .entry-title a")
+    items = _parse_rss_items(xml_text)
+    _log(f"  {name}: parsed {len(items)} RSS items")
 
-    for a in articles[:15]:
-        try:
-            title = a.get_text(strip=True)
-            href = a.get("href", "")
-            if not title or not _is_relevant(title):
-                continue
-            amount = _extract_amount(title)
-            rtype = _extract_round_type(title)
-            company = _extract_company_from_headline(title)
-            if not company:
-                continue
-            db_match = _fuzzy_match(company, db_names)
-            findings.append(_build_finding(
-                "Geektime", company, title, href,
-                rtype, "", amount, "", "", "new_round", db_match
-            ))
-        except Exception:
-            continue
-
-    time.sleep(DELAY)
-    _log(f"  Geektime: found {len(findings)} candidate(s)")
-    return findings
-
-
-def _scrape_securityweek(db_names):
     findings = []
-    url = "https://www.securityweek.com/?s=israel+funding"
-    _log(f"  Fetching SecurityWeek: {url}")
-    r = _get(url)
-    if not r:
-        _log("  SecurityWeek: no response")
-        return []
+    seen_ids = set()
 
-    soup = BeautifulSoup(r.text, "html.parser")
-    articles = soup.select("h2 a, h3 a, .article-title a")
+    for item in items:
+        title = item["title"]
+        desc = item["description"]
+        link = item["link"]
+        pub_date = item["pub_date"]
 
-    for a in articles[:15]:
-        try:
-            title = a.get_text(strip=True)
-            href = a.get("href", "")
-            if not title or not _is_relevant(title):
-                continue
-            amount = _extract_amount(title)
-            rtype = _extract_round_type(title)
-            company = _extract_company_from_headline(title)
-            if not company:
-                continue
-            db_match = _fuzzy_match(company, db_names)
-            findings.append(_build_finding(
-                "SecurityWeek", company, title, href,
-                rtype, "", amount, "", "", "new_round", db_match
-            ))
-        except Exception:
+        if not _is_relevant(title, desc, require_israel=require_israel):
             continue
 
-    time.sleep(DELAY)
-    _log(f"  SecurityWeek: found {len(findings)} candidate(s)")
+        combined_text = title + " " + desc
+        amount = _extract_amount(combined_text)
+        rtype = _extract_round_type(combined_text)
+        company = _extract_company_from_headline(title)
+
+        if not company:
+            # Try description lead
+            company = _extract_company_from_headline(desc[:200])
+        if not company:
+            _log(f"    Skip (no company name): {title[:70]}")
+            continue
+
+        db_match = _fuzzy_match(company, db_names)
+        ftype = "new_company" if not db_match else "new_round"
+
+        if _already_staged(company, rtype, pub_date):
+            _log(f"    Skip (already staged): {company}")
+            continue
+
+        finding = _build_finding(
+            name, company, title, link,
+            rtype, pub_date, amount, "", "", ftype, db_match
+        )
+
+        if finding["id"] not in seen_ids:
+            seen_ids.add(finding["id"])
+            findings.append(finding)
+            _log(f"    + Found: {company} ({rtype or '?'} {amount or '?'}M) — {title[:55]}")
+
+    _log(f"  {name}: {len(findings)} qualifying finding(s)")
     return findings
-
-
-def _scrape_ctech(db_names):
-    findings = []
-    urls = [
-        "https://ctech.calcalist.co.il/search?q=cybersecurity+funding",
-        "https://ctech.calcalist.co.il/search?q=israel+cyber+raise",
-    ]
-    for url in urls:
-        _log(f"  Fetching CTech: {url}")
-        r = _get(url)
-        if not r:
-            continue
-        soup = BeautifulSoup(r.text, "html.parser")
-        articles = soup.select("a[href]")
-
-        for a in articles[:30]:
-            try:
-                title = a.get_text(strip=True)
-                href = a.get("href", "")
-                if len(title) < 20 or not _is_relevant(title):
-                    continue
-                amount = _extract_amount(title)
-                rtype = _extract_round_type(title)
-                company = _extract_company_from_headline(title)
-                if not company:
-                    continue
-                db_match = _fuzzy_match(company, db_names)
-                findings.append(_build_finding(
-                    "CTech", company, title, href,
-                    rtype, "", amount, "", "", "new_round", db_match
-                ))
-            except Exception:
-                continue
-        time.sleep(DELAY)
-
-    # Deduplicate within this source
-    seen = set()
-    unique = []
-    for f in findings:
-        key = f["id"]
-        if key not in seen:
-            seen.add(key)
-            unique.append(f)
-
-    _log(f"  CTech: found {len(unique)} candidate(s)")
-    return unique
-
-
-def _extract_company_from_headline(headline):
-    """
-    Heuristic: many headlines follow patterns like:
-      "CompanyName Raises $XM in Series A"
-      "CompanyName Secures $XM"
-      "Israeli CompanyName Gets $XM"
-    Extract the company name from the start of the headline.
-    """
-    # Strip common prefixes
-    headline = re.sub(r"^(Israeli|Israel-based|Tel Aviv)\s+", "", headline, flags=re.IGNORECASE)
-
-    # Match "Name Raises/Secures/Gets/Closes/Announces"
-    m = re.match(
-        r"^([A-Z][A-Za-z0-9\.\-\s]{1,35}?)\s+"
-        r"(raises?|secures?|gets?|closes?|announces?|lands?|nets?|bags?|receives?|completes?)\b",
-        headline,
-        re.IGNORECASE,
-    )
-    if m:
-        return m.group(1).strip()
-
-    # Match "Name, a ... startup, raises"
-    m2 = re.match(r"^([A-Z][A-Za-z0-9\.\-\s]{1,35}?),\s+a\b", headline)
-    if m2:
-        return m2.group(1).strip()
-
-    return None
 
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def run_scrape():
     """
-    Run all scrapers, cross-reference findings, deduplicate, and stage results.
-    Updates staging.json throughout. Returns list of new findings added.
+    Fetch all RSS feeds, filter for Israeli cyber funding news,
+    cross-reference against DB, and stage new findings.
     """
     global log_lines
     log_lines = []
 
-    # Mark as running
     data = staging.load_staging()
     data["scrape_status"] = "running"
     data["scrape_log"] = []
     staging.save_staging(data)
 
     try:
-        _log("Starting scrape — checking last 7 days of Israeli cyber news")
+        _log(f"Starting RSS scrape — {len(RSS_FEEDS)} feed(s)")
         db_names = _load_db_companies()
-        _log(f"Loaded {len(db_names)} companies from database for cross-reference")
+        _log(f"Loaded {len(db_names)} companies from database")
 
         all_findings = []
 
-        _log("Scraping CTech...")
-        try:
-            all_findings += _scrape_ctech(db_names)
-        except Exception as e:
-            _log(f"  CTech error: {e}")
+        for feed in RSS_FEEDS:
+            try:
+                all_findings += _scrape_feed(feed, db_names)
+            except Exception as e:
+                _log(f"  {feed['name']} error: {e}")
+            time.sleep(DELAY)
 
-        _log("Scraping TechCrunch...")
-        try:
-            all_findings += _scrape_techcrunch(db_names)
-        except Exception as e:
-            _log(f"  TechCrunch error: {e}")
-
-        _log("Scraping Geektime...")
-        try:
-            all_findings += _scrape_geektime(db_names)
-        except Exception as e:
-            _log(f"  Geektime error: {e}")
-
-        _log("Scraping SecurityWeek...")
-        try:
-            all_findings += _scrape_securityweek(db_names)
-        except Exception as e:
-            _log(f"  SecurityWeek error: {e}")
-
-        # Deduplicate across sources by id
+        # Deduplicate across feeds by id
         seen_ids = set()
-        unique_findings = []
+        unique = []
         for f in all_findings:
             if f["id"] not in seen_ids:
                 seen_ids.add(f["id"])
-                unique_findings.append(f)
+                unique.append(f)
 
-        in_db = sum(1 for f in unique_findings if f["company_in_db"])
-        new_cos = sum(1 for f in unique_findings if not f["company_in_db"])
-        portfolio_hits = [f for f in unique_findings if f.get("is_portfolio")]
+        in_db     = sum(1 for f in unique if f["company_in_db"])
+        new_cos   = sum(1 for f in unique if not f["company_in_db"])
+        portfolio = [f for f in unique if f.get("is_portfolio")]
 
-        _log(f"Cross-reference complete: {in_db} matched existing companies, {new_cos} potential new companies")
-        if portfolio_hits:
-            _log(f"⚠ {len(portfolio_hits)} finding(s) match Lama portfolio companies — review carefully")
+        _log(f"Total: {len(unique)} unique finding(s) — "
+             f"{in_db} matched existing, {new_cos} potentially new")
+        if portfolio:
+            _log(f"⚠ {len(portfolio)} match Lama portfolio — review carefully")
 
-        added = staging.add_findings(unique_findings)
+        added = staging.add_findings(unique)
         _log(f"Staged {added} new finding(s) (duplicates skipped). Done.")
 
-        # Save final status
         data = staging.load_staging()
         data["scrape_status"] = "complete"
         data["last_scraped"] = datetime.now(timezone.utc).isoformat()
         data["scrape_log"] = log_lines
-        # Next Monday 9am Israel time
         data["next_scheduled"] = _next_monday_israel()
         staging.save_staging(data)
 
-        return unique_findings
+        return unique
 
     except Exception as e:
         _log(f"Fatal scrape error: {e}")
@@ -467,7 +392,6 @@ def run_scrape():
 
 
 def _next_monday_israel():
-    from datetime import timezone as tz
     try:
         from zoneinfo import ZoneInfo
         israel = ZoneInfo("Asia/Jerusalem")
@@ -485,4 +409,4 @@ if __name__ == "__main__":
     results = run_scrape()
     print(f"\nTotal findings: {len(results)}")
     for f in results:
-        print(f"  [{f['source_name']}] {f['company_name']} — {f['headline'][:60]}")
+        print(f"  [{f['source_name']}] {f['company_name']} — {f['headline'][:70]}")

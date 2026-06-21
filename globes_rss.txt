@@ -1,0 +1,18 @@
+Homepage status: 200
+RSS/feed links found:
+  https://en.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1725
+  /Finance/Shared/SearchResults.asp?Feeder=0&amp;TypeID=6&amp;WhatType=1&amp;lang=EN&amp;strToSearch=A
+  /Finance/Shared/SearchResults.asp?ExchangeID=45&amp;Feeder=0&amp;TypeID=18&amp;WhatType=1&amp;lang=en
+  /Finance/Shared/SearchResults.asp?Feeder=1&amp;WhatType=3&amp;TypeID=30&amp;lang=en
+  https://en.globes.co.il/WebService/Rss/RssFeeder.asmx/FeederNode?iID=942
+  /en/article.aspx?did=850820"><span>RSS</span
+  /en/article.aspx?did=850820">RSS</a
+  /en/article.aspx?did=850820"><span>Visit rss</span
+  /Finance/Shared/SearchResults.asp?Feeder=1&amp;SearchIdxInst=1&amp;Lang=EN&amp;WhatType=3&amp;TypeID=12&amp;IdxInstrumentID=
+  /Finance/Shared/SearchResults.asp?Feeder=1&amp;WhatType=3&amp;TypeID=14&amp;lang=en
+  ('application/rss+xml', 'https://en.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1725')
+  https://en.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1724
+  /Finance/Shared/SearchResults.asp?ExchangeID=45&amp;Feeder=0&amp;TypeID=15&amp;WhatType=1&amp;lang=en
+  ('application/rss+xml', 'https://en.globes.co.il/WebService/Rss/RssFeeder.asmx/FeederNode?iID=942')
+  /Finance/Shared/SearchResults.asp?Lang=EN&amp;Field=3&amp;Direction=1&amp;WhatType=1&amp;TypeID=16&amp;Feeder=0&amp;strToSearch=A
+  https://en.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=4111
