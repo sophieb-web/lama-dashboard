@@ -81,6 +81,17 @@ def merge_approved():
 
         ftype = finding["type"]
         data = finding["data"]
+
+        # Default round type when scraper couldn't detect one
+        if not data.get("round_type"):
+            size = data.get("round_size") or 0
+            try:
+                size = float(size)
+            except (TypeError, ValueError):
+                size = 0
+            data["round_type"] = "Growth" if size >= 100 else "Undisclosed"
+            _log(f"  Defaulted round_type to '{data['round_type']}' (size={size}M)")
+
         _log(f"Processing [{ftype}] {name} (round={data.get('round_type')} size={data.get('round_size')}M)")
 
         try:

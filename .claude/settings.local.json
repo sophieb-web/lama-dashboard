@@ -27,7 +27,8 @@
       "Bash(python -c \"import staging; print\\(staging.get_stats\\(\\)\\)\")",
       "Bash(python scraper.py)",
       "Bash(python -c \"import sys; [print\\(l\\) for l in sys.stdin.read\\(\\).splitlines\\(\\)]\")",
-      "Bash(python -c \"import sys;[print\\(l\\) for l in sys.stdin.read\\(\\).splitlines\\(\\)]\")"
+      "Bash(python -c \"import sys;[print\\(l\\) for l in sys.stdin.read\\(\\).splitlines\\(\\)]\")",
+      "Bash(git pull *)"
     ]
   }
 }

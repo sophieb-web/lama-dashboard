@@ -122,8 +122,11 @@ def load_data():
     companies = []
     for name, group in df.groupby("Company Name", sort=False):
         first = group.iloc[0]
-        # Latest round info
-        deal_rows = group[group["Round Type"].notna() & (group["Round Type"].str.strip() != "")]
+        # Latest round info — include rows with a date or size even if Round Type is empty
+        has_type = group["Round Type"].notna() & (group["Round Type"].str.strip() != "")
+        has_date = group["Round Date"].notna() & (group["Round Date"].str.strip() != "")
+        has_size = group["Round Size ($M)"].notna()
+        deal_rows = group[has_type | has_date | has_size]
 
         # Determine stage from round types
         stage = _determine_stage(deal_rows, first)
