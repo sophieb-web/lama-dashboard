@@ -1,9 +1,91 @@
 {
-  "last_scraped": null,
-  "next_scheduled": null,
-  "scrape_status": "idle",
-  "scrape_log": [],
-  "pending": [],
+  "last_scraped": "2026-06-21T11:22:03.716777+00:00",
+  "next_scheduled": "2026-06-22T09:00:00+03:00",
+  "scrape_status": "complete",
+  "scrape_log": [
+    "[11:21:57] Starting RSS scrape — 3 feed(s)",
+    "[11:21:57] Loaded 486 companies from database",
+    "[11:21:57]   Fetching TechCrunch Security: https://techcrunch.com/category/security/feed/",
+    "[11:21:58]   TechCrunch Security: parsed 20 RSS items",
+    "[11:21:58]   TechCrunch Security: 0 qualifying finding(s)",
+    "[11:21:59]   Fetching SecurityWeek: https://www.securityweek.com/feed/",
+    "[11:21:59]   SecurityWeek: parsed 10 RSS items",
+    "[11:21:59]     Skip (no company name): In Other News: Apple Patches Beats Eavesdropping Flaw, DOT Closes Delt",
+    "[11:21:59]   SecurityWeek: 0 qualifying finding(s)",
+    "[11:22:01]   Fetching Globes: https://en.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1725",
+    "[11:22:02]   Globes: parsed 93 RSS items",
+    "[11:22:02]     + Found: Dream Security (? 260.0M) — Dream Security raises $260m at $3b valuation",
+    "[11:22:02]     Skip (no company name): 1Password buys Israeli just-in-time access co Apono",
+    "[11:22:02]     Skip (no company name): US refueling planes threaten Israel’s summer flight schedule",
+    "[11:22:02]     + Found: Aryon Security (? 25.0M) — Israeli startup Aryon Security raises $25m",
+    "[11:22:02]     + Found: Cyera (? 600.0M) — Cyera raises $600m at $12b valuation",
+    "[11:22:02]     + Found: A Security (? 37.0M) — Israeli offensive security co A Security raises $37m",
+    "[11:22:02]   Globes: 4 qualifying finding(s)",
+    "[11:22:03] Total: 4 unique finding(s) — 4 matched existing, 0 potentially new",
+    "[11:22:03] Staged 4 new finding(s) (duplicates skipped). Done."
+  ],
+  "pending": [
+    {
+      "id": "dc570585da53a0b4",
+      "type": "new_round",
+      "status": "pending",
+      "company_name": "Aryon Security",
+      "company_in_db": true,
+      "db_match": "Aryon Security",
+      "is_portfolio": false,
+      "source_url": "https://en.globes.co.il/en/article-1001545509#utm_source=RSS",
+      "source_name": "Globes",
+      "headline": "Israeli startup Aryon Security raises $25m",
+      "scraped_at": "2026-06-21T11:22:02.215681+00:00",
+      "data": {
+        "round_type": "",
+        "round_date": "2026-06-10",
+        "round_size": 25.0,
+        "lead_investor": "",
+        "co_investors": ""
+      }
+    },
+    {
+      "id": "4aec06134a27b4e3",
+      "type": "new_round",
+      "status": "pending",
+      "company_name": "Cyera",
+      "company_in_db": true,
+      "db_match": "Cyera",
+      "is_portfolio": false,
+      "source_url": "https://en.globes.co.il/en/article-1001545507#utm_source=RSS",
+      "source_name": "Globes",
+      "headline": "Cyera raises $600m at $12b valuation",
+      "scraped_at": "2026-06-21T11:22:02.215829+00:00",
+      "data": {
+        "round_type": "",
+        "round_date": "2026-06-10",
+        "round_size": 600.0,
+        "lead_investor": "",
+        "co_investors": ""
+      }
+    },
+    {
+      "id": "31925cc1f86b2b5d",
+      "type": "new_round",
+      "status": "pending",
+      "company_name": "A Security",
+      "company_in_db": true,
+      "db_match": "A Security",
+      "is_portfolio": false,
+      "source_url": "https://en.globes.co.il/en/article-1001545318#utm_source=RSS",
+      "source_name": "Globes",
+      "headline": "Israeli offensive security co A Security raises $37m",
+      "scraped_at": "2026-06-21T11:22:02.215999+00:00",
+      "data": {
+        "round_type": "",
+        "round_date": "2026-06-08",
+        "round_size": 37.0,
+        "lead_investor": "",
+        "co_investors": ""
+      }
+    }
+  ],
   "approved": [],
   "rejected": [],
   "pushed": [
@@ -26,6 +108,28 @@
         "lead_investor": "",
         "co_investors": ""
       }
+    },
+    {
+      "id": "65d60d34f7843042",
+      "type": "new_round",
+      "status": "pushed",
+      "company_name": "Dream Security",
+      "company_in_db": true,
+      "db_match": "Dream Security",
+      "is_portfolio": false,
+      "source_url": "https://en.globes.co.il/en/article-1001546297#utm_source=RSS",
+      "source_name": "Globes",
+      "headline": "Dream Security raises $260m at $3b valuation",
+      "scraped_at": "2026-06-21T11:22:02.215210+00:00",
+      "data": {
+        "round_type": "",
+        "round_date": "2026-06-18",
+        "round_size": 260.0,
+        "lead_investor": "",
+        "co_investors": ""
+      }
     }
-  ]
+  ],
+  "push_status": "running",
+  "push_result": null
 }
