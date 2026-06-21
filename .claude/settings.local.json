@@ -28,7 +28,13 @@
       "Bash(python scraper.py)",
       "Bash(python -c \"import sys; [print\\(l\\) for l in sys.stdin.read\\(\\).splitlines\\(\\)]\")",
       "Bash(python -c \"import sys;[print\\(l\\) for l in sys.stdin.read\\(\\).splitlines\\(\\)]\")",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "Bash(python -m py_compile lama_dashboard/merger.py)",
+      "Bash(python -m py_compile lama_dashboard/pusher.py)",
+      "Bash(python -m py_compile lama_dashboard/data_loader.py)",
+      "Bash(python -m py_compile lama_dashboard/app.py)",
+      "Bash(python -c \"import os; size=os.path.getsize\\('Lama_Israeli_Cyber_Deal_Database_v8.xlsx'\\); print\\(f'xlsx size: {size/1024/1024:.1f} MB'\\)\")",
+      "Bash(git push *)"
     ]
   }
 }
