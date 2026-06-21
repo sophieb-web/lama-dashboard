@@ -97,27 +97,30 @@ def api_deals():
 
 @app.route("/api/query", methods=["POST"])
 def api_query():
-    data = request.get_json()
-    question = data.get("question", "").strip()
-    if not question:
-        return jsonify({"error": "No question provided"}), 400
+    try:
+        data = request.get_json()
+        question = data.get("question", "").strip()
+        if not question:
+            return jsonify({"error": "No question provided"}), 400
 
-    from query_engine import query
-    companies = get_companies()
-    # Slim down company objects for the API
-    slim = [{
-        "name": c["name"], "sector": c["sector"], "founding_year": c["founding_year"],
-        "total_raised": c["total_raised"], "valuation": c["valuation"],
-        "stage": c["stage"], "acquired": c["acquired"], "acquirer": c["acquirer"],
-        "is_portfolio": c["is_portfolio"], "is_8200": c["is_8200"],
-        "military_unit": c["military_unit"], "founders": c["founders"],
-        "description": c["description"], "employees": c["employees"],
-        "lead_investors": c["lead_investors"], "notes": c["notes"],
-    } for c in companies]
+        from query_engine import query
+        companies = get_companies()
+        slim = [{
+            "name": c["name"], "sector": c["sector"], "founding_year": c["founding_year"],
+            "total_raised": c["total_raised"], "valuation": c["valuation"],
+            "stage": c["stage"], "acquired": c["acquired"], "acquirer": c["acquirer"],
+            "is_portfolio": c["is_portfolio"], "is_8200": c["is_8200"],
+            "military_unit": c["military_unit"], "founders": c["founders"],
+            "description": c["description"], "employees": c["employees"],
+            "lead_investors": c["lead_investors"], "notes": c["notes"],
+        } for c in companies]
 
-    context = get_combined_context(30000)
-    answer = query(question, slim, context)
-    return jsonify({"answer": answer})
+        context = get_combined_context(30000)
+        answer = query(question, slim, context)
+        return jsonify({"answer": answer})
+    except Exception as e:
+        app.logger.error(f"Query error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 # ─── Page routes ─────────────────────────────────────────────────────────────
