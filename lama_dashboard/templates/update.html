@@ -267,9 +267,11 @@ function renderAll(data) {
   document.getElementById('tab-rejected-count').textContent = (data.rejected || []).length;
   document.getElementById('tab-pushed-count').textContent   = (data.pushed   || []).length;
 
-  // Push button
+  // Push button — always reset text so "⏳ Pushing…" never gets stuck
   const canPush = (data.approved || []).length > 0;
-  document.getElementById('btn-push').disabled = !canPush;
+  const pushBtn = document.getElementById('btn-push');
+  pushBtn.disabled = !canPush || data.push_status === 'running';
+  pushBtn.textContent = data.push_status === 'running' ? '⏳ Pushing…' : '📤 Push to Dashboard';
 
   // Scrape button
   const scraping = data.scrape_status === 'running';
@@ -443,20 +445,43 @@ function closePushModal() {
 
 function confirmPush() {
   closePushModal();
-  document.getElementById('btn-push').disabled = true;
-  document.getElementById('btn-push').textContent = '⏳ Pushing…';
+  const pushBtn = document.getElementById('btn-push');
+  pushBtn.disabled = true;
+  pushBtn.textContent = '⏳ Pushing…';
 
   fetch('/api/push', {method:'POST'})
     .then(r => r.json())
     .then(resp => {
       if (resp.status === 'started') {
-        showPushSuccess();
-        setTimeout(loadStaging, 8000);
+        pollPushCompletion();
       } else {
         showError('Push failed', resp.message || 'Unknown error');
       }
     })
     .catch(e => showError('Push failed', e.message));
+}
+
+function pollPushCompletion() {
+  let attempts = 0;
+  const maxAttempts = 40; // 40 × 3s = 2 minutes max
+  const interval = setInterval(() => {
+    attempts++;
+    fetch('/api/staging').then(r => r.json()).then(data => {
+      stagingData = data;
+      renderAll(data);
+      const status = data.push_status;
+      if (status === 'success') {
+        clearInterval(interval);
+        showPushSuccess();
+      } else if (status === 'error') {
+        clearInterval(interval);
+        showError('Push failed', data.push_result || 'Check Railway logs.');
+      } else if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        showError('Push timed out', 'No response after 2 minutes. Check Railway logs.');
+      }
+    });
+  }, 3000);
 }
 
 function showPushSuccess() {
