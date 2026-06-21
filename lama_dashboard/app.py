@@ -227,14 +227,29 @@ def api_edit(fid):
 @app.route("/api/push", methods=["POST"])
 def api_push():
     def _push():
+        import staging as st
+        data = st.load_staging()
+        data["push_status"] = "running"
+        data["push_result"] = None
+        st.save_staging(data)
         try:
             from merger import merge_approved
             summary = merge_approved()
+            app.logger.info(f"[push] merge summary: {summary}")
             from pusher import push_to_github
             result = push_to_github(summary)
-            app.logger.info(f"Push result: {result}")
+            app.logger.info(f"[push] push result: {result}")
+            data = st.load_staging()
+            data["push_status"] = "success" if result["success"] else "error"
+            data["push_result"] = result["message"]
+            data["push_summary"] = summary
+            st.save_staging(data)
         except Exception as e:
-            app.logger.error(f"Push error: {e}")
+            app.logger.error(f"[push] fatal error: {e}", exc_info=True)
+            data = st.load_staging()
+            data["push_status"] = "error"
+            data["push_result"] = str(e)
+            st.save_staging(data)
 
     t = threading.Thread(target=_push, daemon=True)
     t.start()
