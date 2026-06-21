@@ -1,0 +1,521 @@
+═══════════════════════════════════════════════════════════════════════════════
+LAMA PARTNERS — DASHBOARD UPDATE FEATURE
+CLAUDE CODE BUILD PROMPT
+June 2026
+═══════════════════════════════════════════════════════════════════════════════
+
+READ THIS ENTIRE PROMPT BEFORE WRITING ANY CODE.
+
+This prompt adds an Update Center to the existing Lama dashboard.
+Do not touch any existing pages or files unless explicitly told to.
+Add new files only. Modify app.py only to add new routes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1: WHAT THIS FEATURE DOES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A news monitor that automatically checks reliable sources every Monday
+for new Israeli cyber funding news, then stages the findings for human
+review before anything touches the live database.
+
+The full flow:
+
+  TRIGGER (Monday auto OR "Update Now" button)
+       ↓
+  SCRAPER runs — checks CTech, TechCrunch, Geektime, SecurityWeek,
+  Crunchbase for Israeli cyber news from the last 7 days
+       ↓
+  STAGING — findings written to staging.json as pending changes
+       ↓
+  REVIEW — user sees each finding as a card, approves or rejects
+       ↓
+  PUSH — approved changes merged into deals.csv + taxonomy.csv,
+  committed to GitHub, Railway redeploys automatically
+
+Nothing ever goes into the live database without explicit human approval.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2: NEW FILES TO CREATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Create these new files inside lama_dashboard/:
+
+  scraper.py         — web scraping logic
+  scheduler.py       — Monday auto-run using APScheduler
+  staging.py         — read/write staging.json
+  merger.py          — merge approved changes into CSVs
+  pusher.py          — git add, commit, push programmatically
+
+Create this new template:
+  templates/update.html   — Update Center page
+
+Create this new data file (starts empty):
+  data/staging.json       — stores pending changes between sessions
+
+Add to requirements.txt:
+  apscheduler
+  beautifulsoup4
+  requests
+  gitpython
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 3: SCRAPER.PY — DETAILED SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The scraper is pure Python — no AI, no Anthropic API. Just HTTP requests
+and HTML parsing. It costs nothing to run.
+
+Sources to scrape (in this order):
+
+1. CTech (ctech.calcalist.co.il)
+   - Search URL: https://ctech.calcalist.co.il/search?q=cybersecurity+funding
+   - Also check: https://ctech.calcalist.co.il/search?q=israel+cyber+raise
+   - Look for articles published in the last 7 days
+   - Extract: headline, company name, amount, investors, date, article URL
+
+2. TechCrunch (techcrunch.com)
+   - Search URL: https://techcrunch.com/search/?q=israel+cybersecurity
+   - Filter to last 7 days
+   - Extract: headline, company name, amount, investors, date, article URL
+
+3. Geektime (geektime.com)
+   - Search URL: https://www.geektime.com/?s=cybersecurity+funding+israel
+   - Filter to last 7 days
+   - Extract: headline, company name, amount, investors, date, article URL
+
+4. SecurityWeek (securityweek.com)
+   - Search URL: https://www.securityweek.com/?s=israel+funding
+   - Filter to last 7 days
+   - Extract: headline, company name, amount, investors, date, article URL
+
+5. Crunchbase (crunchbase.com) — for companies already in our database
+   - For each company in deals.csv that has a Crunchbase URL or known name,
+     check if there are new funding rounds not yet in our database
+   - Only check companies where the latest round in our DB is > 6 months old
+   - Note: Crunchbase may block scraping — if so, skip gracefully and log it
+
+Scraping rules:
+  - Use requests with a realistic User-Agent header
+  - Add 2-3 second delays between requests to be polite
+  - Wrap every request in try/except — if a source fails, log it and continue
+  - Never crash the whole scrape because one source is down
+  - Timeout each request after 10 seconds
+
+What to extract per finding:
+  {
+    "id": "unique string (source + date + company name hashed)",
+    "type": "new_round" | "new_company" | "acquisition" | "enrichment",
+    "status": "pending",  // pending, approved, rejected
+    "company_name": "string",
+    "company_in_db": true/false,  // whether company exists in deals.csv
+    "source_url": "string",
+    "source_name": "CTech" | "TechCrunch" | "Geektime" | "SecurityWeek",
+    "headline": "string",
+    "scraped_at": "ISO timestamp",
+    "data": {
+      // For new_round:
+      "round_type": "Seed" | "Series A" | etc,
+      "round_date": "string",
+      "round_size": "float or null",
+      "lead_investor": "string",
+      "co_investors": "string",
+      // For new_company:
+      "description": "string",
+      "sector_tag": "string (best guess from context)",
+      "hq": "string",
+      "founded": "string",
+      // For acquisition:
+      "acquirer": "string",
+      "exit_size": "string"
+    }
+  }
+
+Cross-reference logic:
+  - After scraping, compare company_name against all Company Name values
+    in deals.csv
+  - Use fuzzy matching (fuzz.ratio from rapidfuzz library) with threshold 85
+    to catch "Jazz" matching "Jazz Security" etc.
+  - If match found: set company_in_db = true, link to existing record
+  - If no match: set company_in_db = false (new company to add)
+  - Add rapidfuzz to requirements.txt
+
+Deduplication:
+  - Before adding to staging.json, check if a finding with the same
+    company_name + round_type + round_date already exists in staging.json
+  - If duplicate found, skip it
+  - Also check against deals.csv — if the round already exists in the
+    database, skip it
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 4: STAGING.PY — DETAILED SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+staging.json structure:
+
+  {
+    "last_scraped": "ISO timestamp or null",
+    "next_scheduled": "ISO timestamp (next Monday 9am Israel time)",
+    "scrape_status": "idle" | "running" | "complete" | "error",
+    "scrape_log": ["line 1", "line 2", ...],  // log of last scrape run
+    "pending": [...],    // findings awaiting review
+    "approved": [...],   // approved, not yet pushed
+    "rejected": [...],   // rejected by user
+    "pushed": [...]      // already merged into database
+  }
+
+staging.py functions:
+  - load_staging() → dict
+  - save_staging(data) → None
+  - add_findings(findings_list) → None  (appends to pending, deduplicates)
+  - approve_finding(finding_id) → None  (moves pending → approved)
+  - reject_finding(finding_id) → None   (moves pending → rejected)
+  - approve_all() → None                (moves all pending → approved)
+  - get_approved() → list               (returns approved list)
+  - clear_pushed(finding_ids) → None    (moves approved → pushed)
+  - get_stats() → dict                  (counts per status)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 5: SCHEDULER.PY — DETAILED SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use APScheduler (BackgroundScheduler) to run the scraper automatically.
+
+Schedule:
+  - Every Monday at 9:00am Israel time (Asia/Jerusalem timezone)
+  - Job: run scraper.py, write results to staging.json
+  - If scraper is already running, skip this run (no overlapping jobs)
+
+Initialize the scheduler in app.py when Flask starts:
+  from scheduler import start_scheduler
+  start_scheduler()
+
+The scheduler should:
+  - Start automatically when the Flask app starts
+  - Run in the background (non-blocking)
+  - Log each run to staging.json scrape_log
+  - Update staging.json last_scraped and next_scheduled timestamps
+  - Set scrape_status to "running" while scraping, "complete" or "error" after
+
+On Railway:
+  - APScheduler works fine on Railway with a single worker
+  - Make sure gunicorn runs with --workers 1 to avoid multiple scheduler
+    instances. Update Procfile to:
+    web: gunicorn --chdir lama_dashboard --workers 1 app:app
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 6: MERGER.PY — DETAILED SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+merger.py takes approved findings from staging.json and merges them
+into deals.csv. It does NOT touch the Excel file — only the CSVs.
+
+merge_approved() function:
+  1. Load deals.csv into a pandas DataFrame
+  2. Get all approved findings from staging.py
+  3. For each approved finding:
+
+     If type == "new_round" and company_in_db == true:
+       - Find all existing rows for this company in the DataFrame
+       - Get the company profile from the first row (cols 1-20)
+       - Create a new row with that same profile + the new deal data
+       - Append the new row to the DataFrame
+
+     If type == "new_company":
+       - Create a new row with whatever data was scraped
+       - Fill in: Company Name, Website, Description, HQ, Sector Tag,
+         Founding Year (if found), Round Type, Round Date, Round Size,
+         Lead Investor, Co-Investors, Source (the article URL), Notes
+       - Leave other fields blank — they'll be filled in during manual
+         enrichment sessions
+       - Append to DataFrame
+
+     If type == "acquisition":
+       - Find all existing rows for this company
+       - Update Acquired? to "Yes", Acquirer to the acquirer name,
+         Exit Size to the exit size if known
+
+  4. Sort the DataFrame: Lama portfolio companies first, then alphabetical
+     by Company Name
+  5. Save back to deals.csv
+  6. Move merged findings from approved → pushed in staging.json
+  7. Return a summary: {merged: N, new_companies: N, new_rounds: N}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 7: PUSHER.PY — DETAILED SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+pusher.py handles the git push after merger.py runs.
+
+Use the gitpython library (already in requirements.txt).
+
+push_to_github() function:
+  1. Get the repo root path (two levels up from lama_dashboard/)
+  2. Open the git repo: repo = git.Repo(repo_root)
+  3. Stage the changed files:
+       repo.index.add(['lama_dashboard/data/deals.csv',
+                       'lama_dashboard/data/taxonomy.csv',
+                       'lama_dashboard/data/staging.json'])
+  4. Create a commit:
+       commit_message = f"auto-update: {N} new deals, {N} new companies — {date}"
+       repo.index.commit(commit_message)
+  5. Push to origin main:
+       origin = repo.remote(name='origin')
+       origin.push()
+  6. Return success/failure status
+
+Git authentication on Railway:
+  - Railway needs a GitHub Personal Access Token to push
+  - Add a new Railway environment variable: GITHUB_TOKEN = ghp_xxxxxx
+  - In pusher.py, construct the remote URL with the token:
+      token = os.environ.get('GITHUB_TOKEN')
+      remote_url = f"https://{token}@github.com/sophieb-web/lama-dashboard.git"
+      origin.set_url(remote_url)
+  - Never hardcode the token in the code
+
+To get a GitHub Personal Access Token:
+  github.com → Settings → Developer Settings → Personal Access Tokens
+  → Tokens (classic) → Generate new token
+  → Scopes: check "repo" (full repo access)
+  → Copy and add to Railway Variables as GITHUB_TOKEN
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 8: UPDATE CENTER PAGE (/update)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add "Update" to the sidebar navigation in base.html.
+Create templates/update.html with the following layout:
+
+─────────────────────────────────────────────────────────────────────────────
+HEADER ROW
+─────────────────────────────────────────────────────────────────────────────
+Page title: "Update Center"
+
+Status bar showing:
+  • Last scraped: [timestamp or "Never"]
+  • Next scheduled: [next Monday 9am Israel time]
+  • Status pill: IDLE (gray) | RUNNING (yellow, pulsing) | COMPLETE (green)
+    | ERROR (red)
+
+Two buttons:
+  [🔄 Update Now]    — triggers scrape immediately (POST /api/scrape)
+  [📤 Push to Dashboard]  — only enabled when there are approved findings
+                            triggers merge + git push (POST /api/push)
+
+─────────────────────────────────────────────────────────────────────────────
+STATS ROW (4 cards)
+─────────────────────────────────────────────────────────────────────────────
+  Pending Review: [N]   |  Approved: [N]  |  Rejected: [N]  |  Pushed: [N]
+
+─────────────────────────────────────────────────────────────────────────────
+SCRAPE LOG (collapsible)
+─────────────────────────────────────────────────────────────────────────────
+Shows the log lines from the last scrape run.
+Collapsible — collapsed by default.
+Monospace font, dark background, like a terminal.
+Example:
+  [09:00:01] Starting scrape — checking last 7 days
+  [09:00:02] Scraping CTech... found 3 articles
+  [09:00:05] Scraping TechCrunch... found 1 article
+  [09:00:08] Scraping Geektime... found 2 articles
+  [09:00:11] SecurityWeek... no results
+  [09:00:12] Cross-referencing 6 findings against database...
+  [09:00:12] 4 findings matched existing companies, 2 are new companies
+  [09:00:12] Deduplication: 1 finding already in database, skipped
+  [09:00:12] Staging 5 new findings. Done.
+
+─────────────────────────────────────────────────────────────────────────────
+PENDING REVIEW (main section)
+─────────────────────────────────────────────────────────────────────────────
+Tab bar: [Pending (N)] [Approved (N)] [Rejected (N)] [Pushed (N)]
+
+Each finding shown as a card:
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  🆕 NEW ROUND  ·  CTech  ·  scraped Jun 18 2026             │
+  │                                                              │
+  │  Company Name         Acme Security                         │
+  │  In Database?         ✅ Yes — matched "Acme Security"      │
+  │  Round Type           Series A                              │
+  │  Round Date           Jun 2026                              │
+  │  Round Size           $25M                                  │
+  │  Lead Investor        Glilot Capital                        │
+  │  Co-Investors         CyberStarts, YL Ventures              │
+  │                                                              │
+  │  Source: [CTech article headline — click to open]           │
+  │                                                              │
+  │  [✅ Approve]  [❌ Reject]  [✏️ Edit before approving]      │
+  └──────────────────────────────────────────────────────────────┘
+
+Card types and colors:
+  NEW ROUND     — blue left border
+  NEW COMPANY   — green left border
+  ACQUISITION   — orange left border
+  ENRICHMENT    — purple left border
+
+Above the cards, two bulk action buttons:
+  [✅ Approve All]   [❌ Reject All]
+
+Edit before approving:
+  Clicking ✏️ Edit opens an inline form with all fields editable
+  User can correct any wrong data before approving
+  Save button closes the form and marks as approved with edits
+
+─────────────────────────────────────────────────────────────────────────────
+PUSH CONFIRMATION MODAL
+─────────────────────────────────────────────────────────────────────────────
+When user clicks "Push to Dashboard", show a modal:
+
+  "You are about to push [N] approved changes to the live dashboard.
+   
+   Summary:
+   • [N] new funding rounds
+   • [N] new companies
+   • [N] acquisition updates
+   
+   This will commit to GitHub and Railway will redeploy automatically
+   (~60 seconds).
+   
+   [Cancel]  [Confirm Push]"
+
+After push:
+  Show a success message: "✅ Pushed successfully. Dashboard updating now."
+  Show a progress indicator for ~60 seconds
+  Then show a link: "View live dashboard →"
+
+─────────────────────────────────────────────────────────────────────────────
+ERROR STATES
+─────────────────────────────────────────────────────────────────────────────
+If scrape fails:
+  Show red error card with the error message and a "Retry" button
+
+If push fails:
+  Show red error card with the error
+  Most likely cause: GITHUB_TOKEN not set or expired
+  Show message: "Check that GITHUB_TOKEN is set in Railway Variables"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 9: NEW FLASK ROUTES TO ADD IN APP.PY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add these routes to app.py — do not change any existing routes:
+
+GET  /update
+     Renders update.html with current staging data
+
+GET  /api/staging
+     Returns full staging.json as JSON
+     Used by the page to poll for status updates
+
+POST /api/scrape
+     Triggers scraper in a background thread (non-blocking)
+     Returns immediately: {"status": "started"}
+     The page polls /api/staging every 3 seconds to check progress
+
+POST /api/approve/<finding_id>
+     Approves a single finding
+     Returns updated staging stats
+
+POST /api/reject/<finding_id>
+     Rejects a single finding
+     Returns updated staging stats
+
+POST /api/approve-all
+     Approves all pending findings
+     Returns updated staging stats
+
+POST /api/edit/<finding_id>
+     Updates the data fields of a pending finding before approving
+     Body: {field: value, ...}
+     Returns updated finding
+
+POST /api/push
+     Runs merger.py then pusher.py
+     Runs in background thread
+     Returns immediately: {"status": "started"}
+     Page polls /api/staging to track completion
+     On completion: staging.json updated with pushed findings
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 10: ENVIRONMENT VARIABLES NEEDED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add these to Railway Variables (in addition to ANTHROPIC_API_KEY):
+
+GITHUB_TOKEN    — Personal Access Token from github.com
+                  Scopes needed: repo (full)
+                  Used by pusher.py to push commits from Railway
+
+These are already set:
+ANTHROPIC_API_KEY  — for the query chatbot (not used by update feature)
+PORT               — set by Railway automatically
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 11: BUILD ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Build in this exact order so we can test each piece:
+
+1. staging.py + data/staging.json (empty)
+   Test: import staging; staging.get_stats() returns zeros
+
+2. scraper.py — start with just CTech, test it works
+   Test: python scraper.py → prints findings to console
+
+3. Add other sources to scraper.py one at a time
+   Test each one before moving on
+
+4. scheduler.py
+   Test: start Flask locally, verify scheduler initializes without errors
+
+5. templates/update.html + GET /update route
+   Test: page loads, shows empty state correctly
+
+6. POST /api/scrape route + polling
+   Test: click Update Now → status changes to RUNNING → findings appear
+
+7. Approve/reject routes
+   Test: approve a finding → moves to approved tab
+
+8. merger.py
+   Test: run on dummy approved finding → deals.csv updated correctly
+
+9. pusher.py
+   Test locally first with a test commit, then test on Railway
+
+10. POST /api/push route
+    Test: full end-to-end push → commit appears on GitHub
+
+11. Polish: error states, edit modal, push confirmation modal
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 12: IMPORTANT NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- The scraper uses zero AI. It is pure HTTP requests + HTML parsing.
+  No Anthropic API calls. No charges.
+
+- staging.json is committed to GitHub as part of each push. This means
+  the review state persists across Railway redeploys.
+
+- The scraper may get blocked by some sites (Crunchbase especially).
+  Always fail gracefully — log the error and continue with other sources.
+
+- Never modify the Excel file (Lama_Israeli_Cyber_Deal_Database_v8.xlsx).
+  The dashboard reads only from deals.csv and taxonomy.csv.
+  The Excel is managed separately through Claude.ai sessions.
+
+- The Lama portfolio companies (Terra, Orion Security, Root, Capsule, Jit)
+  should never be modified by the auto-merger. If a finding matches a
+  portfolio company name, flag it for manual review with a warning:
+  "⚠️ This matches a Lama portfolio company — review carefully"
+
+- The sector taxonomy (12 sectors) is fixed. If the scraper finds a new
+  company, it should make a best guess at the sector from context but
+  always leave it editable in the review UI before approving.
+
+- Run with --workers 1 in gunicorn to prevent multiple scheduler instances:
+  Procfile: web: gunicorn --chdir lama_dashboard --workers 1 app:app
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF PROMPT
+═══════════════════════════════════════════════════════════════════════════════

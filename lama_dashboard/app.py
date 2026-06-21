@@ -1,4 +1,5 @@
 import os
+import threading
 from flask import Flask, render_template, jsonify, request
 
 from data_loader import load_data, get_companies, get_stats, get_investors, get_taxonomy, get_raw_df, SECTOR_COLORS, LAMA_PORTFOLIO
@@ -9,6 +10,13 @@ app = Flask(__name__)
 # Load everything at startup
 load_data()
 load_context()
+
+# Start background scheduler (Monday 9am Israel time auto-scrape)
+try:
+    from scheduler import start_scheduler
+    start_scheduler()
+except Exception as _e:
+    app.logger.warning(f"Scheduler not started: {_e}")
 
 
 # ─── API routes ──────────────────────────────────────────────────────────────
@@ -145,6 +153,92 @@ def deals_page():
 @app.route("/query")
 def query_page():
     return render_template("query.html")
+
+
+@app.route("/update")
+def update_page():
+    return render_template("update.html")
+
+
+# ─── Update Center API ────────────────────────────────────────────────────────
+
+@app.route("/api/staging")
+def api_staging():
+    import staging as st
+    data = st.load_staging()
+    return jsonify(data)
+
+
+@app.route("/api/scrape", methods=["POST"])
+def api_scrape():
+    import staging as st
+    data = st.load_staging()
+    if data.get("scrape_status") == "running":
+        return jsonify({"status": "already_running"})
+
+    def _run():
+        try:
+            from scraper import run_scrape
+            run_scrape()
+        except Exception as e:
+            app.logger.error(f"Scrape error: {e}")
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return jsonify({"status": "started"})
+
+
+@app.route("/api/approve/<fid>", methods=["POST"])
+def api_approve(fid):
+    import staging as st
+    st.approve_finding(fid)
+    return jsonify(st.load_staging())
+
+
+@app.route("/api/reject/<fid>", methods=["POST"])
+def api_reject(fid):
+    import staging as st
+    st.reject_finding(fid)
+    return jsonify(st.load_staging())
+
+
+@app.route("/api/approve-all", methods=["POST"])
+def api_approve_all():
+    import staging as st
+    st.approve_all()
+    return jsonify(st.load_staging())
+
+
+@app.route("/api/reject-all", methods=["POST"])
+def api_reject_all():
+    import staging as st
+    st.reject_all()
+    return jsonify(st.load_staging())
+
+
+@app.route("/api/edit/<fid>", methods=["POST"])
+def api_edit(fid):
+    import staging as st
+    field_updates = request.get_json() or {}
+    st.update_finding(fid, field_updates)
+    return jsonify({"status": "updated"})
+
+
+@app.route("/api/push", methods=["POST"])
+def api_push():
+    def _push():
+        try:
+            from merger import merge_approved
+            summary = merge_approved()
+            from pusher import push_to_github
+            result = push_to_github(summary)
+            app.logger.info(f"Push result: {result}")
+        except Exception as e:
+            app.logger.error(f"Push error: {e}")
+
+    t = threading.Thread(target=_push, daemon=True)
+    t.start()
+    return jsonify({"status": "started"})
 
 
 if __name__ == "__main__":

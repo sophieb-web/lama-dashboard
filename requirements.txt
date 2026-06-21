@@ -3,3 +3,8 @@ pandas
 openpyxl
 anthropic
 gunicorn
+apscheduler
+beautifulsoup4
+requests
+gitpython
+rapidfuzz

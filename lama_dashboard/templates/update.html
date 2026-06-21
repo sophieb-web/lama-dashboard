@@ -1,0 +1,487 @@
+{% extends "base.html" %}
+{% set active = "update" %}
+
+{% block page_title %}Update Center{% endblock %}
+
+{% block content %}
+
+<!-- Status bar -->
+<div class="card" style="margin-bottom:20px;padding:16px 20px">
+  <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Last Scraped</div>
+      <div style="font-size:14px;font-weight:600" id="last-scraped">—</div>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Next Scheduled</div>
+      <div style="font-size:14px;font-weight:600" id="next-scheduled">—</div>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Status</div>
+      <div id="status-pill" class="status-pill status-idle">IDLE</div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+      <button class="btn btn-primary" id="btn-scrape" onclick="triggerScrape()">🔄 Update Now</button>
+      <button class="btn btn-secondary" id="btn-push" onclick="showPushModal()" disabled>📤 Push to Dashboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- Error card -->
+<div id="error-card" class="card" style="display:none;margin-bottom:20px;border-left:4px solid #ef4444;padding:16px 20px">
+  <div style="display:flex;align-items:center;gap:12px">
+    <span style="font-size:20px">❌</span>
+    <div>
+      <div style="font-weight:600;color:#ef4444" id="error-title">Error</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-top:4px" id="error-msg"></div>
+    </div>
+    <button class="btn btn-ghost" style="margin-left:auto" onclick="triggerScrape()">Retry</button>
+  </div>
+</div>
+
+<!-- Stats row -->
+<div class="stats-row" style="margin-bottom:20px">
+  <div class="stat-card">
+    <div class="stat-value" id="stat-pending" style="color:#F59E0B">0</div>
+    <div class="stat-label">Pending Review</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="stat-approved" style="color:var(--green)">0</div>
+    <div class="stat-label">Approved</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="stat-rejected" style="color:#EF4444">0</div>
+    <div class="stat-label">Rejected</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="stat-pushed" style="color:var(--purple)">0</div>
+    <div class="stat-label">Pushed</div>
+  </div>
+</div>
+
+<!-- Scrape log (collapsible) -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-header" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center"
+       onclick="toggleLog()">
+    <span>📋 Scrape Log</span>
+    <span id="log-toggle-arrow" style="color:var(--text-muted)">▶</span>
+  </div>
+  <div id="scrape-log" style="display:none">
+    <pre id="log-content" style="background:#0f0f1a;color:#a0f0a0;padding:16px;font-size:12px;font-family:monospace;margin:0;max-height:240px;overflow-y:auto;border-radius:0 0 12px 12px;white-space:pre-wrap">No scrape log yet.</pre>
+  </div>
+</div>
+
+<!-- Findings tabs -->
+<div class="card">
+  <div style="display:flex;border-bottom:1px solid var(--border)">
+    <button class="tab-btn active" id="tab-pending" onclick="switchTab('pending')">Pending (<span id="tab-pending-count">0</span>)</button>
+    <button class="tab-btn" id="tab-approved" onclick="switchTab('approved')">Approved (<span id="tab-approved-count">0</span>)</button>
+    <button class="tab-btn" id="tab-rejected" onclick="switchTab('rejected')">Rejected (<span id="tab-rejected-count">0</span>)</button>
+    <button class="tab-btn" id="tab-pushed" onclick="switchTab('pushed')">Pushed (<span id="tab-pushed-count">0</span>)</button>
+  </div>
+
+  <!-- Bulk actions (only for pending) -->
+  <div id="bulk-actions" style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px">
+    <button class="btn btn-secondary" onclick="approveAll()">✅ Approve All</button>
+    <button class="btn btn-ghost" onclick="rejectAll()">❌ Reject All</button>
+  </div>
+
+  <div id="findings-container" style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+    <div style="text-align:center;padding:40px;color:var(--text-muted)">
+      No findings yet. Click "Update Now" to scrape for new deals.
+    </div>
+  </div>
+</div>
+
+<!-- Push confirmation modal -->
+<div id="push-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:28px;max-width:460px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.2)">
+    <h3 style="font-size:17px;margin-bottom:8px">Push to Live Dashboard</h3>
+    <p style="color:var(--text-muted);font-size:13.5px;margin-bottom:16px">
+      You are about to push <strong id="modal-count">0</strong> approved changes to the live dashboard.
+    </p>
+    <div id="modal-summary" style="background:var(--bg-light);border-radius:8px;padding:12px 16px;font-size:13px;margin-bottom:20px;line-height:1.8"></div>
+    <p style="color:var(--text-muted);font-size:12.5px;margin-bottom:20px">
+      This will commit to GitHub and Railway will redeploy automatically (~60 seconds).
+    </p>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closePushModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmPush()">Confirm Push</button>
+    </div>
+  </div>
+</div>
+
+<!-- Push success banner -->
+<div id="push-success" style="display:none;position:fixed;bottom:24px;right:24px;background:#059669;color:#fff;border-radius:12px;padding:16px 20px;z-index:400;box-shadow:0 4px 20px rgba(0,0,0,0.2);max-width:320px">
+  <div style="font-weight:600;margin-bottom:4px">✅ Pushed successfully</div>
+  <div style="font-size:13px;opacity:0.9">Dashboard is updating now…</div>
+  <div id="push-countdown" style="font-size:12px;margin-top:6px;opacity:0.75"></div>
+</div>
+
+{% endblock %}
+
+{% block head %}
+<style>
+.tab-btn {
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.tab-btn:hover { color: var(--purple); }
+.tab-btn.active { color: var(--purple); border-bottom-color: var(--purple); }
+
+.status-pill {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .5px;
+}
+.status-idle    { background: #f3f4f6; color: #6b7280; }
+.status-running { background: #fef3c7; color: #92400e; animation: pulse 1.2s infinite; }
+.status-complete{ background: #d1fae5; color: #065f46; }
+.status-error   { background: #fee2e2; color: #991b1b; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+.finding-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.finding-card-header {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-light);
+}
+.finding-card-body {
+  padding: 14px 16px;
+}
+.finding-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.finding-row .lbl { color: var(--text-muted); min-width: 120px; }
+.finding-row .val { font-weight: 500; }
+.finding-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.finding-card.type-new_round   { border-left: 4px solid #0EA5E9; }
+.finding-card.type-new_company { border-left: 4px solid #059669; }
+.finding-card.type-acquisition { border-left: 4px solid #D97706; }
+.finding-card.type-enrichment  { border-left: 4px solid var(--purple); }
+
+.edit-form { display:none; margin-top:12px; }
+.edit-form input {
+  width: 100%; padding: 6px 10px; border: 1px solid var(--border);
+  border-radius: 6px; font-family: inherit; font-size: 13px;
+  margin-bottom: 8px; outline: none;
+}
+.edit-form input:focus { border-color: var(--purple); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let stagingData = {};
+let currentTab = 'pending';
+let pollInterval = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => { loadStaging(); });
+
+function loadStaging() {
+  fetch('/api/staging')
+    .then(r => r.json())
+    .then(data => {
+      stagingData = data;
+      renderAll(data);
+      if (data.scrape_status === 'running') startPolling();
+    });
+}
+
+function startPolling() {
+  if (pollInterval) return;
+  pollInterval = setInterval(() => {
+    fetch('/api/staging').then(r => r.json()).then(data => {
+      stagingData = data;
+      renderAll(data);
+      if (data.scrape_status !== 'running') stopPolling();
+    });
+  }, 3000);
+}
+
+function stopPolling() {
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll(data) {
+  // Status bar
+  document.getElementById('last-scraped').textContent = data.last_scraped
+    ? new Date(data.last_scraped).toLocaleString() : 'Never';
+  document.getElementById('next-scheduled').textContent = data.next_scheduled
+    ? new Date(data.next_scheduled).toLocaleDateString('en-GB', {weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+    : '—';
+
+  const pill = document.getElementById('status-pill');
+  pill.className = 'status-pill status-' + (data.scrape_status || 'idle');
+  pill.textContent = (data.scrape_status || 'idle').toUpperCase();
+
+  // Error card
+  const errCard = document.getElementById('error-card');
+  if (data.scrape_status === 'error') {
+    errCard.style.display = 'block';
+    document.getElementById('error-msg').textContent =
+      (data.scrape_log || []).slice(-1)[0] || 'Unknown error. Check Railway logs.';
+  } else {
+    errCard.style.display = 'none';
+  }
+
+  // Stats
+  document.getElementById('stat-pending').textContent  = (data.pending  || []).length;
+  document.getElementById('stat-approved').textContent = (data.approved || []).length;
+  document.getElementById('stat-rejected').textContent = (data.rejected || []).length;
+  document.getElementById('stat-pushed').textContent   = (data.pushed   || []).length;
+
+  // Tab counts
+  document.getElementById('tab-pending-count').textContent  = (data.pending  || []).length;
+  document.getElementById('tab-approved-count').textContent = (data.approved || []).length;
+  document.getElementById('tab-rejected-count').textContent = (data.rejected || []).length;
+  document.getElementById('tab-pushed-count').textContent   = (data.pushed   || []).length;
+
+  // Push button
+  const canPush = (data.approved || []).length > 0;
+  document.getElementById('btn-push').disabled = !canPush;
+
+  // Scrape button
+  const scraping = data.scrape_status === 'running';
+  const scrapeBtn = document.getElementById('btn-scrape');
+  scrapeBtn.disabled = scraping;
+  scrapeBtn.textContent = scraping ? '⏳ Scraping…' : '🔄 Update Now';
+
+  // Log
+  const log = (data.scrape_log || []);
+  document.getElementById('log-content').textContent = log.length ? log.join('\n') : 'No scrape log yet.';
+
+  // Bulk actions visibility
+  document.getElementById('bulk-actions').style.display = currentTab === 'pending' ? 'flex' : 'none';
+
+  renderFindings(data);
+}
+
+function renderFindings(data) {
+  const container = document.getElementById('findings-container');
+  const items = data[currentTab] || [];
+
+  if (!items.length) {
+    const msgs = {
+      pending: 'No findings pending review. Click "Update Now" to scrape.',
+      approved: 'No approved findings yet.',
+      rejected: 'No rejected findings.',
+      pushed: 'No findings pushed yet.',
+    };
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">${msgs[currentTab]}</div>`;
+    return;
+  }
+
+  container.innerHTML = items.map(f => renderCard(f)).join('');
+}
+
+function renderCard(f) {
+  const typeLabels = { new_round:'🆕 NEW ROUND', new_company:'🏢 NEW COMPANY', acquisition:'🏆 ACQUISITION', enrichment:'✏️ ENRICHMENT' };
+  const d = f.data || {};
+  const isPending = f.status === 'pending';
+  const isPortfolio = f.is_portfolio;
+
+  const portfolioWarn = isPortfolio
+    ? `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:8px 12px;font-size:12.5px;color:#92400e;margin-bottom:10px">⚠️ This matches a Lama portfolio company — review carefully</div>`
+    : '';
+
+  const actions = isPending ? `
+    <div class="finding-actions">
+      <button class="btn btn-secondary" style="font-size:12px" onclick="approve('${f.id}')">✅ Approve</button>
+      <button class="btn btn-ghost" style="font-size:12px" onclick="reject('${f.id}')">❌ Reject</button>
+      <button class="btn btn-ghost" style="font-size:12px" onclick="toggleEdit('${f.id}')">✏️ Edit</button>
+    </div>
+    <div class="edit-form" id="edit-${f.id}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label style="font-size:11px;color:var(--text-muted)">Round Type</label><input id="ef-round_type-${f.id}" value="${esc(d.round_type)}"></div>
+        <div><label style="font-size:11px;color:var(--text-muted)">Round Date</label><input id="ef-round_date-${f.id}" value="${esc(d.round_date)}"></div>
+        <div><label style="font-size:11px;color:var(--text-muted)">Round Size ($M)</label><input id="ef-round_size-${f.id}" value="${esc(d.round_size)}"></div>
+        <div><label style="font-size:11px;color:var(--text-muted)">Lead Investor</label><input id="ef-lead_investor-${f.id}" value="${esc(d.lead_investor)}"></div>
+        <div style="grid-column:1/-1"><label style="font-size:11px;color:var(--text-muted)">Co-Investors</label><input id="ef-co_investors-${f.id}" value="${esc(d.co_investors)}"></div>
+      </div>
+      <button class="btn btn-primary" style="font-size:12px;margin-top:8px" onclick="saveEdit('${f.id}')">Save & Approve</button>
+    </div>` : '';
+
+  return `<div class="finding-card type-${f.type}" id="card-${f.id}">
+    <div class="finding-card-header">
+      <span>${typeLabels[f.type] || f.type.toUpperCase()}</span>
+      <span style="color:var(--text-muted)">·</span>
+      <span>${esc(f.source_name)}</span>
+      <span style="color:var(--text-muted)">·</span>
+      <span style="color:var(--text-muted);font-weight:400">${esc(f.scraped_at ? new Date(f.scraped_at).toLocaleDateString() : '')}</span>
+    </div>
+    <div class="finding-card-body">
+      ${portfolioWarn}
+      <div class="finding-row"><span class="lbl">Company</span><span class="val">${esc(f.company_name)}</span></div>
+      <div class="finding-row"><span class="lbl">In Database?</span><span class="val">${f.company_in_db ? '✅ Yes — matched "' + esc(f.db_match) + '"' : '🆕 No — new company'}</span></div>
+      ${d.round_type ? `<div class="finding-row"><span class="lbl">Round Type</span><span class="val">${esc(d.round_type)}</span></div>` : ''}
+      ${d.round_date ? `<div class="finding-row"><span class="lbl">Round Date</span><span class="val">${esc(d.round_date)}</span></div>` : ''}
+      ${d.round_size != null ? `<div class="finding-row"><span class="lbl">Round Size</span><span class="val">$${esc(d.round_size)}M</span></div>` : ''}
+      ${d.lead_investor ? `<div class="finding-row"><span class="lbl">Lead Investor</span><span class="val">${esc(d.lead_investor)}</span></div>` : ''}
+      ${d.co_investors ? `<div class="finding-row"><span class="lbl">Co-Investors</span><span class="val">${esc(d.co_investors)}</span></div>` : ''}
+      <div class="finding-row" style="margin-top:8px">
+        <span class="lbl">Source</span>
+        <a href="${esc(f.source_url)}" target="_blank" rel="noopener" style="color:var(--purple);font-size:12.5px">${esc(f.headline ? f.headline.slice(0,80) + (f.headline.length>80?'…':'') : f.source_url)}</a>
+      </div>
+      ${actions}
+    </div>
+  </div>`;
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function approve(id) {
+  fetch(`/api/approve/${id}`, {method:'POST'})
+    .then(r => r.json()).then(data => { stagingData = data; renderAll(data); });
+}
+
+function reject(id) {
+  fetch(`/api/reject/${id}`, {method:'POST'})
+    .then(r => r.json()).then(data => { stagingData = data; renderAll(data); });
+}
+
+function approveAll() {
+  fetch('/api/approve-all', {method:'POST'})
+    .then(r => r.json()).then(data => { stagingData = data; renderAll(data); });
+}
+
+function rejectAll() {
+  fetch('/api/reject-all', {method:'POST'})
+    .then(r => r.json()).then(data => { stagingData = data; renderAll(data); });
+}
+
+function toggleEdit(id) {
+  const form = document.getElementById('edit-' + id);
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+function saveEdit(id) {
+  const fields = ['round_type','round_date','round_size','lead_investor','co_investors'];
+  const updates = {};
+  fields.forEach(f => {
+    const el = document.getElementById(`ef-${f}-${id}`);
+    if (el) updates[f] = el.value;
+  });
+  fetch(`/api/edit/${id}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(updates),
+  }).then(() => approve(id));
+}
+
+function triggerScrape() {
+  fetch('/api/scrape', {method:'POST'})
+    .then(r => r.json())
+    .then(() => {
+      startPolling();
+      loadStaging();
+    });
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('bulk-actions').style.display = tab === 'pending' ? 'flex' : 'none';
+  renderFindings(stagingData);
+}
+
+function toggleLog() {
+  const log = document.getElementById('scrape-log');
+  const arrow = document.getElementById('log-toggle-arrow');
+  const open = log.style.display === 'none';
+  log.style.display = open ? 'block' : 'none';
+  arrow.textContent = open ? '▼' : '▶';
+}
+
+// ── Push modal ────────────────────────────────────────────────────────────────
+function showPushModal() {
+  const approved = stagingData.approved || [];
+  document.getElementById('modal-count').textContent = approved.length;
+  const rounds = approved.filter(f => f.type === 'new_round').length;
+  const newCos = approved.filter(f => f.type === 'new_company').length;
+  const acqs   = approved.filter(f => f.type === 'acquisition').length;
+  document.getElementById('modal-summary').innerHTML =
+    `• ${rounds} new funding round${rounds!==1?'s':''}<br>` +
+    `• ${newCos} new compan${newCos!==1?'ies':'y'}<br>` +
+    `• ${acqs} acquisition update${acqs!==1?'s':''}`;
+  document.getElementById('push-modal').style.display = 'flex';
+}
+
+function closePushModal() {
+  document.getElementById('push-modal').style.display = 'none';
+}
+
+function confirmPush() {
+  closePushModal();
+  document.getElementById('btn-push').disabled = true;
+  document.getElementById('btn-push').textContent = '⏳ Pushing…';
+
+  fetch('/api/push', {method:'POST'})
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.status === 'started') {
+        showPushSuccess();
+        setTimeout(loadStaging, 8000);
+      } else {
+        showError('Push failed', resp.message || 'Unknown error');
+      }
+    })
+    .catch(e => showError('Push failed', e.message));
+}
+
+function showPushSuccess() {
+  const banner = document.getElementById('push-success');
+  banner.style.display = 'block';
+  let secs = 60;
+  const cd = document.getElementById('push-countdown');
+  const timer = setInterval(() => {
+    secs--;
+    cd.textContent = `Railway redeploying… ~${secs}s remaining`;
+    if (secs <= 0) { clearInterval(timer); banner.style.display = 'none'; }
+  }, 1000);
+}
+
+function showError(title, msg) {
+  document.getElementById('error-card').style.display = 'block';
+  document.getElementById('error-title').textContent = title;
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('btn-push').textContent = '📤 Push to Dashboard';
+  document.getElementById('btn-push').disabled = false;
+}
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}
