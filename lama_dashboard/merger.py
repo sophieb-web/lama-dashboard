@@ -5,6 +5,7 @@ from datetime import date
 import staging as st
 
 DEALS_CSV = os.path.join(os.path.dirname(__file__), "data", "deals.csv")
+XLSX_FILE = os.path.join(os.path.dirname(__file__), "..", "Lama_Israeli_Cyber_Deal_Database_v8.xlsx")
 LAMA_PORTFOLIO = {"Terra", "Orion Security", "Root", "Capsule", "Jit"}
 
 
@@ -59,6 +60,42 @@ def _save_df(df):
     _log(f"Saved {len(df)} rows to {DEALS_CSV}")
 
 
+def _save_xlsx(new_rows):
+    """Append new rows (list of dicts) to the xlsx file."""
+    if not new_rows:
+        return
+
+    xlsx_path = os.path.normpath(XLSX_FILE)
+    if not os.path.exists(xlsx_path):
+        _log(f"XLSX not found at {xlsx_path} — skipping")
+        return
+
+    try:
+        import openpyxl
+    except ImportError:
+        _log("openpyxl not installed — skipping xlsx update")
+        return
+
+    wb = openpyxl.load_workbook(xlsx_path)
+    ws = wb["Deals"]
+    xlsx_cols = [cell.value for cell in ws[3]]  # row 3 = column headers
+
+    for row_dict in new_rows:
+        xlsx_row = []
+        for col in xlsx_cols:
+            v = row_dict.get(col, None)
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                xlsx_row.append(None)
+            else:
+                s = str(v).strip()
+                xlsx_row.append(None if s in ("", "nan", "None") else s)
+        ws.append(xlsx_row)
+        _log(f"  + xlsx: appended {row_dict.get('Company Name')} | {row_dict.get('Round Type')} | {row_dict.get('Round Date')}")
+
+    wb.save(xlsx_path)
+    _log(f"Saved xlsx: {len(new_rows)} row(s) added to {xlsx_path}")
+
+
 def merge_approved():
     approved = st.get_approved()
     _log(f"Found {len(approved)} approved finding(s)")
@@ -70,6 +107,7 @@ def merge_approved():
     rows_before = len(df)
     pushed_ids = []
     counts = {"new_rounds": 0, "new_companies": 0, "acquisitions": 0}
+    new_xlsx_rows = []  # rows to append to xlsx
 
     for finding in approved:
         name = finding["company_name"]
@@ -110,6 +148,7 @@ def merge_approved():
                 template["Source"] = _s(finding.get("source_url") or finding.get("source_name"))
                 template["Notes"] = f"Auto-added from {finding['source_name']} scrape"
                 df = pd.concat([df, pd.DataFrame([template])], ignore_index=True)
+                new_xlsx_rows.append(template.to_dict())
                 counts["new_rounds"] += 1
                 _log(f"  + New round row added for {name}")
 
@@ -130,6 +169,7 @@ def merge_approved():
                 new_row["Source"] = _s(finding.get("source_url") or finding.get("source_name"))
                 new_row["Notes"] = f"Auto-added from {finding['source_name']} — {finding['headline'][:80]}"
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+                new_xlsx_rows.append(new_row)
                 counts["new_companies"] += 1
                 _log(f"  + New company row added for {name}")
 
@@ -151,6 +191,7 @@ def merge_approved():
 
     _log(f"Rows before: {rows_before} | after: {len(df)} | delta: {len(df) - rows_before}")
     _save_df(df)
+    _save_xlsx(new_xlsx_rows)
     st.clear_pushed(pushed_ids)
 
     total = sum(counts.values())

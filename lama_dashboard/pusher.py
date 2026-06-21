@@ -91,8 +91,9 @@ def push_to_github(summary=None):
 
     # Files to push
     files = [
-        ("lama_dashboard/data/deals.csv",    os.path.join(REPO_ROOT, "lama_dashboard", "data", "deals.csv")),
-        ("lama_dashboard/data/staging.json", os.path.join(REPO_ROOT, "lama_dashboard", "data", "staging.json")),
+        ("lama_dashboard/data/deals.csv",                    os.path.join(REPO_ROOT, "lama_dashboard", "data", "deals.csv")),
+        ("lama_dashboard/data/staging.json",                 os.path.join(REPO_ROOT, "lama_dashboard", "data", "staging.json")),
+        ("Lama_Israeli_Cyber_Deal_Database_v8.xlsx",         os.path.join(REPO_ROOT, "Lama_Israeli_Cyber_Deal_Database_v8.xlsx")),
     ]
 
     errors = []
