@@ -38,7 +38,9 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(python -c \"import httpx, bs4, anthropic; print\\('All deps OK'\\)\")",
-      "Bash(ls \"C:/Users/Owner/Downloads/\" | grep -i lama)"
+      "Bash(ls \"C:/Users/Owner/Downloads/\" | grep -i lama)",
+      "Bash(git remote *)",
+      "Bash(git config *)"
     ]
   }
 }
