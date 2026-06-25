@@ -254,12 +254,62 @@ function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ── Customer Insights ────────────────────────────────────────────────────────
+
+function renderCustomerInsights() {
+  // Industry cards
+  const container = document.getElementById('industry-cards');
+  if (container && typeof CUSTOMER_INDUSTRIES !== 'undefined') {
+    const top = CUSTOMER_INDUSTRIES.slice(0, 12);
+    const maxCos = Math.max(...top.map(i => i.companies_serving), 1);
+    container.innerHTML = top.map(ind => {
+      const pct = Math.round(ind.companies_serving / maxCos * 100);
+      return `<div style="background:var(--bg-light);border-radius:8px;padding:12px 14px">
+        <div style="font-weight:600;font-size:13px;margin-bottom:6px">${escHtml(ind.industry)}</div>
+        <div style="background:#E5E7EB;border-radius:4px;height:6px;margin-bottom:6px">
+          <div style="background:#6366F1;border-radius:4px;height:6px;width:${pct}%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted)">
+          <span>${ind.companies_serving} companies</span>
+          <span>${ind.testimonials} testimonials</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(ind.key_roles)}">${escHtml(ind.key_roles.split(',')[0] || '')}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // CISO concentration table
+  const cisoEl = document.getElementById('ciso-cos-table');
+  if (cisoEl && typeof CISO_COS !== 'undefined') {
+    cisoEl.innerHTML = `<tbody>${CISO_COS.map(c =>
+      `<tr>
+        <td style="cursor:pointer;color:var(--purple)" onclick="openCompanyPanel && openCompanyPanel('${escHtml(c.name)}')">${escHtml(c.name)}</td>
+        <td>${c.ciso_count} CISO${c.ciso_count !== 1 ? 's' : ''}</td>
+        <td style="color:var(--text-muted)">${c.total_testimonials} total</td>
+      </tr>`
+    ).join('')}</tbody>`;
+  }
+
+  // Overlap table
+  const overlapEl = document.getElementById('overlap-table');
+  if (overlapEl && typeof CUSTOMER_OVERLAP !== 'undefined') {
+    overlapEl.innerHTML = `<tbody>${CUSTOMER_OVERLAP.slice(0, 10).map(o =>
+      `<tr>
+        <td><strong>${escHtml(o.organization)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${escHtml(o.industry)}</span></td>
+        <td style="white-space:nowrap">${o.count} products</td>
+        <td style="font-size:11px;color:var(--text-muted);max-width:160px">${escHtml(o.companies)}</td>
+      </tr>`
+    ).join('')}</tbody>`;
+  }
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 window.addEventListener('load', () => {
   buildFundingCharts();
   buildSectorCharts();
   buildInvestorActivity();
+  renderCustomerInsights();
 
   fetch('/api/companies')
     .then(r => r.json())

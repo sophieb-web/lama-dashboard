@@ -29,10 +29,12 @@ function applyTableFilters() {
   const year = parseInt(document.getElementById('filter-year').value) || 0;
   const military = document.getElementById('filter-military').value;
   const portfolioOnly = document.getElementById('filter-portfolio').checked;
+  const thesisAligned = document.getElementById('filter-thesis-aligned').checked;
   const search = (document.getElementById('global-search').value || '').toLowerCase();
 
   filteredCompanies = allCompanies.filter(c => {
     if (portfolioOnly && !c.is_portfolio) return false;
+    if (thesisAligned && !(c.thesis_alignment_score > 0)) return false;
     if (sector && c.sector !== sector) return false;
     if (stage && c.stage !== stage) return false;
     if (year && c.founding_year && c.founding_year < year) return false;
@@ -165,6 +167,7 @@ function resetTableFilters() {
   document.getElementById('filter-year').value = '';
   document.getElementById('filter-military').value = '';
   document.getElementById('filter-portfolio').checked = false;
+  document.getElementById('filter-thesis-aligned').checked = false;
   document.getElementById('global-search').value = '';
   applyTableFilters();
 }

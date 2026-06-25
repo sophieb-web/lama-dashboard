@@ -73,6 +73,9 @@ def _normalize_investor(name):
 def load_data():
     global _df, _companies, _taxonomy
 
+    from customer_loader import get_customer_data
+    customer_data = get_customer_data()
+
     base = os.path.dirname(__file__)
 
     # Load taxonomy
@@ -190,6 +193,18 @@ def load_data():
             "notes": str(first.get("Notes", "") or ""),
             "source": str(first.get("Source", "") or ""),
         }
+
+        # Merge customer profile data
+        cp = customer_data.get(name, {})
+        company["total_testimonials"] = cp.get("total_testimonials", 0)
+        company["ciso_count"] = cp.get("ciso_count", 0)
+        company["thesis_alignment_score"] = cp.get("thesis_alignment_score", 0)
+        company["top_industries"] = cp.get("top_industries", [])
+        company["top_buyer_roles"] = cp.get("top_buyer_roles", [])
+        company["thesis_quote"] = cp.get("thesis_quote", "")
+        company["why_lama_relevant"] = cp.get("why_lama_relevant", "")
+        company["key_customer_orgs"] = cp.get("key_customer_orgs", "")
+
         companies.append(company)
 
     _companies = companies

@@ -154,13 +154,86 @@ function renderCompanyPanel(c) {
     html += `</div></div>`;
   }
 
-  // Customers
-  const customers = clean(c.customers, '');
-  if (customers) {
+  // Customer Intelligence (from testimonials data)
+  const hasTestimonials = c.total_testimonials && c.total_testimonials > 0;
+  if (hasTestimonials) {
+    const score = c.thesis_alignment_score || 0;
+    const scoreColor = score >= 7 ? '#10B981' : score >= 4 ? '#F59E0B' : '#6B7280';
+    const scoreDots = Array.from({length: 10}, (_, i) =>
+      `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin:1px;background:${i < score ? scoreColor : '#E5E7EB'}"></span>`
+    ).join('');
+
+    const industries = (c.top_industries || []).slice(0, 4);
+    const roles = (c.top_buyer_roles || []).slice(0, 4);
+    const quote = clean(c.thesis_quote, '');
+    const orgs = clean(c.key_customer_orgs, '');
+    const legacy = clean(c.customers, '');
+
     html += `<div class="panel-section">
-      <div class="panel-section-title">Customers</div>
-      <div style="font-size:13px;color:var(--text-muted)">${escHtml(customers)}</div>
-    </div>`;
+      <div class="panel-section-title">Customer Intelligence</div>
+      <div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="background:var(--bg-light);border-radius:8px;padding:8px 12px;text-align:center;min-width:70px">
+          <div style="font-size:20px;font-weight:700;color:var(--text)">${c.total_testimonials}</div>
+          <div style="font-size:11px;color:var(--text-muted)">Testimonials</div>
+        </div>
+        <div style="background:var(--bg-light);border-radius:8px;padding:8px 12px;text-align:center;min-width:70px">
+          <div style="font-size:20px;font-weight:700;color:#0EA5E9">${c.ciso_count || 0}</div>
+          <div style="font-size:11px;color:var(--text-muted)">CISO Quotes</div>
+        </div>
+        <div style="background:var(--bg-light);border-radius:8px;padding:8px 14px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Thesis Alignment</div>
+          <div>${scoreDots}</div>
+          <div style="font-size:11px;color:${scoreColor};font-weight:600">${score}/10</div>
+        </div>
+      </div>`;
+
+    if (industries.length) {
+      html += `<div style="margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Top Customer Industries</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${industries.map(i => `<span style="background:#EDE9FE;color:#6D28D9;border-radius:4px;padding:2px 7px;font-size:12px">${escHtml(i)}</span>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    if (roles.length) {
+      html += `<div style="margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Top Buyer Roles</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${roles.map(r => `<span style="background:#E0F2FE;color:#0369A1;border-radius:4px;padding:2px 7px;font-size:12px">${escHtml(r)}</span>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    if (orgs) {
+      html += `<div style="margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Key Customer Orgs</div>
+        <div style="font-size:12px;color:var(--text)">${escHtml(orgs)}</div>
+      </div>`;
+    } else if (legacy) {
+      html += `<div style="margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Known Customers</div>
+        <div style="font-size:12px;color:var(--text)">${escHtml(legacy)}</div>
+      </div>`;
+    }
+
+    if (quote) {
+      html += `<div style="border-left:3px solid ${scoreColor};padding:8px 10px;background:var(--bg-light);border-radius:0 6px 6px 0;margin-top:6px">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Best thesis-aligned quote</div>
+        <div style="font-size:12px;color:var(--text);font-style:italic">"${escHtml(quote.slice(0, 240))}${quote.length > 240 ? '…' : ''}"</div>
+      </div>`;
+    }
+
+    html += `</div>`;
+  } else {
+    // Fall back to plain customers field if no testimonial data
+    const customers = clean(c.customers, '');
+    if (customers) {
+      html += `<div class="panel-section">
+        <div class="panel-section-title">Customers</div>
+        <div style="font-size:13px;color:var(--text-muted)">${escHtml(customers)}</div>
+      </div>`;
+    }
   }
 
   // Angels

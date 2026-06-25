@@ -4,10 +4,12 @@ from flask import Flask, render_template, jsonify, request
 
 from data_loader import load_data, get_companies, get_stats, get_investors, get_taxonomy, get_raw_df, SECTOR_COLORS, LAMA_PORTFOLIO
 from context_loader import load_context, get_combined_context
+from customer_loader import load_customer_profiles, get_overlap_data, get_industry_data
 
 app = Flask(__name__)
 
 # Load everything at startup
+load_customer_profiles()
 load_data()
 load_context()
 
@@ -145,7 +147,20 @@ def investors_page():
 @app.route("/intelligence")
 def intelligence_page():
     stats = get_stats()
-    return render_template("intelligence.html", stats=stats)
+    companies = get_companies()
+
+    # CISO buyer concentration — top 10 companies by CISO count
+    ciso_cos = sorted(
+        [{"name": c["name"], "ciso_count": c["ciso_count"], "sector": c["sector"],
+          "total_testimonials": c["total_testimonials"]}
+         for c in companies if c.get("ciso_count", 0) > 0],
+        key=lambda x: -x["ciso_count"]
+    )[:10]
+
+    return render_template("intelligence.html", stats=stats,
+                           overlap=get_overlap_data()[:20],
+                           industries=get_industry_data(),
+                           ciso_cos=ciso_cos)
 
 
 @app.route("/deals")

@@ -201,13 +201,15 @@ function applyMapFilters() {
   const year = parseInt(document.getElementById('filter-year').value) || 0;
   const military = document.getElementById('filter-military').value;
   const portfolioOnly = document.getElementById('filter-portfolio').checked;
+  const thesisAligned = document.getElementById('filter-thesis-aligned').checked;
   const search = document.getElementById('global-search').value.toLowerCase();
 
-  currentFilters = { sector, stage, year, military, portfolio: portfolioOnly, search };
+  currentFilters = { sector, stage, year, military, portfolio: portfolioOnly, thesisAligned, search };
 
   let filtered = allCompanies.filter(c => {
     if (c.is_portfolio) return true;  // Never hide portfolio
     if (portfolioOnly) return false;
+    if (thesisAligned && !(c.thesis_alignment_score > 0)) return false;
     if (sector && c.sector !== sector) return false;
     if (!sectorToggle[c.sector]) return false;
     if (stage && c.stage !== stage) return false;
@@ -235,6 +237,7 @@ function resetMapFilters() {
   document.getElementById('filter-year').value = '';
   document.getElementById('filter-military').value = '';
   document.getElementById('filter-portfolio').checked = false;
+  document.getElementById('filter-thesis-aligned').checked = false;
   document.getElementById('global-search').value = '';
   Object.keys(sectorToggle).forEach(s => sectorToggle[s] = true);
   document.querySelectorAll('.legend-item').forEach(el => el.style.opacity = '1');

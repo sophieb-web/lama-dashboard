@@ -53,6 +53,13 @@
   </div>
   <div class="filter-group">
     <label>&nbsp;</label>
+    <label class="filter-toggle">
+      <input type="checkbox" id="filter-thesis-aligned" onchange="applyTableFilters()">
+      Thesis Aligned
+    </label>
+  </div>
+  <div class="filter-group">
+    <label>&nbsp;</label>
     <div style="display:flex;gap:8px">
       <button class="btn btn-ghost" onclick="resetTableFilters()">Reset</button>
       <button class="btn btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>

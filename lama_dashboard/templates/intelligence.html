@@ -118,6 +118,33 @@
   </div>
 </div>
 
+<!-- F: Customer Insights -->
+<div class="intel-section">
+  <h2>🛒 Customer Insights</h2>
+
+  <!-- F1: Top buyer industries -->
+  <div style="margin-bottom:20px">
+    <h3 style="font-size:15px;margin-bottom:12px">Top Buyer Industries</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px" id="industry-cards"></div>
+  </div>
+
+  <!-- F2: CISO concentration + Overlap -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header">Companies with Highest CISO Buyer Concentration</div>
+      <div class="card-body" style="padding:0">
+        <table class="hot-table" id="ciso-cos-table"></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Enterprise Orgs Using Multiple Israeli Cyber Products</div>
+      <div class="card-body" style="padding:0">
+        <table class="hot-table" id="overlap-table"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -126,6 +153,9 @@
   const SECTOR_BREAKDOWN = {{ stats.sector_breakdown | tojson }};
   const SECTOR_COLORS_MAP = {{ stats.sector_colors | tojson }};
   const STATS = {{ stats | tojson }};
+  const CUSTOMER_INDUSTRIES = {{ industries | tojson }};
+  const CISO_COS = {{ ciso_cos | tojson }};
+  const CUSTOMER_OVERLAP = {{ overlap | tojson }};
 </script>
 <script src="/static/js/charts.js"></script>
 {% endblock %}
