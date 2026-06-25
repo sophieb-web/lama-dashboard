@@ -73,8 +73,12 @@ def _normalize_investor(name):
 def load_data():
     global _df, _companies, _taxonomy
 
-    from customer_loader import get_customer_data
-    customer_data = get_customer_data()
+    try:
+        from customer_loader import get_customer_data
+        customer_data = get_customer_data()
+    except Exception as e:
+        print(f"[data_loader] customer_loader failed: {e}")
+        customer_data = {}
 
     base = os.path.dirname(__file__)
 
