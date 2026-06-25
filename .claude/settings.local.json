@@ -36,7 +36,9 @@
       "Bash(python -c \"import os; size=os.path.getsize\\('Lama_Israeli_Cyber_Deal_Database_v8.xlsx'\\); print\\(f'xlsx size: {size/1024/1024:.1f} MB'\\)\")",
       "Bash(git push *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(python -c \"import httpx, bs4, anthropic; print\\('All deps OK'\\)\")",
+      "Bash(ls \"C:/Users/Owner/Downloads/\" | grep -i lama)"
     ]
   }
 }
