@@ -7,6 +7,7 @@ PROFILES_FILE = os.path.join(DATA_DIR, "Lama_Customer_Profiles.xlsx")
 _customer_data = None
 _overlap_data = None
 _industry_data = None
+_testimonials_by_company = None
 
 
 def _str(v):
@@ -23,7 +24,7 @@ def _int(v, default=0):
 
 
 def load_customer_profiles():
-    global _customer_data, _overlap_data, _industry_data
+    global _customer_data, _overlap_data, _industry_data, _testimonials_by_company
 
     if not os.path.exists(PROFILES_FILE):
         print(f"[customer_loader] File not found: {PROFILES_FILE}")
@@ -95,8 +96,29 @@ def load_customer_profiles():
             })
         _industry_data = industry_data
 
+        # ── All Testimonials ──────────────────────────────────────────────────
+        df4 = pd.read_excel(xl, sheet_name="All Testimonials", header=1)
+        by_company = {}
+        for _, row in df4.iterrows():
+            company = _str(row.get("Company"))
+            if not company:
+                continue
+            quote = _str(row.get("Quote"))
+            if not quote:
+                continue
+            t = {
+                "organization": _str(row.get("Organization")),
+                "role": _str(row.get("Role")),
+                "industry": _str(row.get("Industry")),
+                "thesis_aligned": _str(row.get("Thesis Aligned?")) == "✓ YES",
+                "quote": quote,
+            }
+            by_company.setdefault(company, []).append(t)
+        _testimonials_by_company = by_company
+
         print(f"[customer_loader] Loaded {len(customer_data)} profiles, "
-              f"{len(overlap_data)} overlap records, {len(industry_data)} industries")
+              f"{len(overlap_data)} overlap records, {len(industry_data)} industries, "
+              f"{sum(len(v) for v in by_company.values())} testimonials")
 
     except Exception as e:
         print(f"[customer_loader] Error reading data: {e}")
@@ -106,12 +128,20 @@ def load_customer_profiles():
             _overlap_data = []
         if _industry_data is None:
             _industry_data = []
+        if _testimonials_by_company is None:
+            _testimonials_by_company = {}
 
 
 def get_customer_data():
     if _customer_data is None:
         load_customer_profiles()
     return _customer_data or {}
+
+
+def get_testimonials(company_name):
+    if _testimonials_by_company is None:
+        load_customer_profiles()
+    return (_testimonials_by_company or {}).get(company_name, [])
 
 
 def get_overlap_data():

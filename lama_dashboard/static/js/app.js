@@ -245,6 +245,25 @@ function renderCompanyPanel(c) {
     </div>`;
   }
 
+  // Customer Testimonials (individual, full list)
+  const testimonials = c.testimonials || [];
+  if (testimonials.length) {
+    html += `<div class="panel-section">
+      <div class="panel-section-title">Customer Testimonials (${testimonials.length})</div>
+      <div style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px">`;
+    testimonials.forEach(t => {
+      const tagColor = t.thesis_aligned ? '#10B981' : '#9CA3AF';
+      const tagLabel = t.thesis_aligned ? '✓ Thesis Aligned' : '';
+      const meta = [t.role, t.organization, t.industry].filter(x => x && x !== '—').join(' · ');
+      html += `<div style="background:var(--bg-light);border-radius:8px;padding:10px 12px;border-left:3px solid ${tagColor}">
+        ${tagLabel ? `<div style="font-size:10px;font-weight:600;color:${tagColor};text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${escHtml(tagLabel)}</div>` : ''}
+        <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:6px">"${escHtml(t.quote)}"</div>
+        ${meta ? `<div style="font-size:11px;color:var(--text-muted)">${escHtml(meta)}</div>` : ''}
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
   // Funding history
   const deals = (c.deals || []).filter(d => !isEmpty(d.round_type));
   if (deals.length) {

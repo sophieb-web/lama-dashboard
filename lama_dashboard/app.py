@@ -4,7 +4,7 @@ from flask import Flask, render_template, jsonify, request
 
 from data_loader import load_data, get_companies, get_stats, get_investors, get_taxonomy, get_raw_df, SECTOR_COLORS, LAMA_PORTFOLIO
 from context_loader import load_context, get_combined_context
-from customer_loader import load_customer_profiles, get_overlap_data, get_industry_data
+from customer_loader import load_customer_profiles, get_overlap_data, get_industry_data, get_testimonials
 
 app = Flask(__name__)
 
@@ -41,6 +41,7 @@ def api_company(name):
                    if c["sector"] == match["sector"] and c["name"] != match["name"]]
     same_sector.sort(key=lambda x: -(x["total_raised"] or 0))
     match["related"] = same_sector[:5]
+    match["testimonials"] = get_testimonials(match["name"])
     return jsonify(match)
 
 
