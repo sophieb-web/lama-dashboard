@@ -13,6 +13,117 @@ import signals_store
 LAMA_PORTFOLIO = {"Terra", "Orion Security", "Root", "Capsule", "Jit"}
 _log_lines = []
 
+PROXYCURL_API_KEY = os.environ.get("PROXYCURL_API_KEY", "")
+
+# Titles that indicate the founder is actively founding something new
+_FOUNDING_TITLES = {"founder", "co-founder", "ceo", "chief executive officer", "co-ceo"}
+# Titles that indicate between-roles / advisor mode
+_ADVISOR_TITLES = {"advisor", "independent", "angel", "angel investor", "consultant",
+                   "independent advisor", "board member", "board advisor"}
+
+
+def _proxycurl_check(linkedin_url, acquirer_name):
+    """
+    Call Proxycurl API and return a dict:
+      {
+        "status": "suppressed" | "founding" | "advisor" | "employed_elsewhere" | "failed" | "no_key",
+        "priority_override": "Critical" | "High" | "Medium" | None,
+        "linkedin_note": str,       # short human-readable result
+        "current_company": str,
+        "current_title": str,
+        "linkedin_url": str,
+        "verified": bool,
+      }
+    """
+    base = {
+        "status": "failed",
+        "priority_override": "Medium",
+        "linkedin_note": "",
+        "current_company": "",
+        "current_title": "",
+        "linkedin_url": linkedin_url or "",
+        "verified": False,
+    }
+
+    if not PROXYCURL_API_KEY:
+        base["status"] = "no_key"
+        base["linkedin_note"] = "⚠️ LinkedIn verification skipped — PROXYCURL_API_KEY not set"
+        return base
+
+    if not linkedin_url:
+        base["status"] = "failed"
+        base["linkedin_note"] = "⚠️ No LinkedIn URL in database — verify manually before acting"
+        return base
+
+    try:
+        import requests as _req
+        resp = _req.get(
+            "https://nubela.co/proxycurl/api/v2/linkedin",
+            headers={"Authorization": f"Bearer {PROXYCURL_API_KEY}"},
+            params={"url": linkedin_url},
+            timeout=15,
+        )
+        if resp.status_code == 402:
+            base["status"] = "failed"
+            base["linkedin_note"] = "⚠️ LinkedIn verification failed — Proxycurl out of credits"
+            return base
+        if resp.status_code != 200:
+            base["status"] = "failed"
+            base["linkedin_note"] = f"⚠️ LinkedIn verification failed — API returned {resp.status_code}"
+            return base
+
+        data = resp.json()
+        experiences = data.get("experiences") or []
+
+        if not experiences:
+            base["status"] = "failed"
+            base["linkedin_note"] = "⚠️ LinkedIn verification failed — no experience data returned"
+            return base
+
+        # Find the most recent current role (ends_at is None)
+        current = next((e for e in experiences if e.get("ends_at") is None), experiences[0])
+        title = (current.get("title") or "").strip()
+        company = (current.get("company") or "").strip()
+        title_lower = title.lower()
+
+        base["current_title"] = title
+        base["current_company"] = company
+        base["verified"] = True
+
+        # Check if still at acquirer
+        acquirer_lower = acquirer_name.lower().strip()
+        company_lower = company.lower()
+        if acquirer_lower and (acquirer_lower in company_lower or company_lower in acquirer_lower):
+            base["status"] = "suppressed"
+            base["priority_override"] = None  # suppress entirely
+            base["linkedin_note"] = f"LinkedIn confirms: still at {company} ({title}) — suppressing signal"
+            return base
+
+        # Check founding new company
+        if any(t in title_lower for t in _FOUNDING_TITLES):
+            base["status"] = "founding"
+            base["priority_override"] = "Critical"
+            base["linkedin_note"] = f"✓ LinkedIn confirms: actively founding {company} ({title})"
+            return base
+
+        # Check advisor/between roles
+        if any(t in title_lower for t in _ADVISOR_TITLES) or not company:
+            base["status"] = "advisor"
+            base["priority_override"] = "High"
+            base["linkedin_note"] = f"LinkedIn: between roles / advisor ({title or 'no current title'})"
+            return base
+
+        # Employed elsewhere — still useful signal, lower priority
+        base["status"] = "employed_elsewhere"
+        base["priority_override"] = "Medium"
+        base["linkedin_note"] = f"LinkedIn: employed elsewhere at {company} ({title}) — lower priority"
+        return base
+
+    except Exception as e:
+        base["status"] = "failed"
+        base["linkedin_note"] = f"⚠️ LinkedIn verification failed — {e}"
+        return base
+
 
 def log(msg):
     ts = datetime.now().strftime("%H:%M:%S")
@@ -341,6 +452,7 @@ def detect_database_signals():
     log(f"Founder vesting: checking {len(acquired_companies)} acquired companies")
 
     vesting_found = 0
+    suppressed_count = 0
     for c in acquired_companies:
         name = c.get("name", "")
         founders = c.get("founders", "")
@@ -353,12 +465,14 @@ def detect_database_signals():
             continue
 
         acquirer = c.get('acquirer', 'unknown acquirer')
-        vesting_disclaimer = (
-            "⚠️ Verify on LinkedIn before acting — founder may be actively employed or not planning a new venture."
-        )
+
+        # Pull LinkedIn URL from database (first founder's URL if multiple founders)
+        linkedin_raw = c.get("founder_linkedin", "")
+        linkedin_url = _first_linkedin_url(linkedin_raw)
+
         vesting_db_note = (
-            f"Calculated from acquisition date in database — does not account for founder's current "
-            f"employment status. Always verify on LinkedIn first."
+            f"Calculated from acquisition date in database. "
+            f"Always verify on LinkedIn first."
         )
 
         # CALCULATION A: Vesting window (3-4 years post-acquisition)
@@ -367,111 +481,177 @@ def detect_database_signals():
         pre_window = vesting_start - timedelta(days=90)
 
         if vesting_start <= today <= vesting_end:
-            sig = {
-                "id": _make_id("vesting", name, month),
-                "category": "Founder",
-                "signal_type": "Founder vesting complete",
-                "priority": "Critical",
-                "status": "active",
-                "title": f"{founders} ({name}) — vesting window open",
-                "entity": name,
-                "why_it_matters": "Founder likely free from vesting and considering next company — prime time to build relationship",
-                "action": "Reach out to founder before they start taking meetings",
-                "source_url": "",
-                "source_name": "Database",
-                "source_detail": f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv",
-                "disclaimer": vesting_disclaimer,
-                "detected_at": _now_iso(),
-                "date_of_event": acq_date_str,
-                "notes": (
-                    f"{vesting_db_note} "
-                    f"Vesting window: {vesting_start.strftime('%Y-%m')} to {vesting_end.strftime('%Y-%m')}."
-                ),
-                "portfolio_relevant": False,
-                "portfolio_companies": [],
-            }
-            signals.append(sig)
-            vesting_found += 1
+            li = _proxycurl_check(linkedin_url, acquirer)
+            if li["status"] == "suppressed":
+                log(f"  Suppressed: {founders} ({name}) — {li['linkedin_note']}")
+                suppressed_count += 1
+            else:
+                priority = li["priority_override"] or "Medium"
+                disclaimer = li["linkedin_note"] if li["verified"] else (
+                    li["linkedin_note"] or
+                    "⚠️ Verify on LinkedIn before acting — founder may be actively employed or not planning a new venture."
+                )
+                source_detail = (
+                    f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv"
+                    + (" + LinkedIn verification via Proxycurl" if li["verified"] else "")
+                )
+                sig = {
+                    "id": _make_id("vesting", name, month),
+                    "category": "Founder",
+                    "signal_type": "Founder vesting complete",
+                    "priority": priority,
+                    "status": "active",
+                    "title": f"{founders} ({name}) — vesting window open",
+                    "entity": name,
+                    "why_it_matters": "Founder likely free from vesting and considering next company — prime time to build relationship",
+                    "action": "Reach out to founder before they start taking meetings",
+                    "source_url": "",
+                    "source_name": "Database + LinkedIn" if li["verified"] else "Database",
+                    "source_detail": source_detail,
+                    "disclaimer": disclaimer,
+                    "linkedin_url": li["linkedin_url"],
+                    "linkedin_verified": li["verified"],
+                    "linkedin_current_title": li["current_title"],
+                    "linkedin_current_company": li["current_company"],
+                    "detected_at": _now_iso(),
+                    "date_of_event": acq_date_str,
+                    "notes": (
+                        f"{vesting_db_note} "
+                        f"Vesting window: {vesting_start.strftime('%Y-%m')} to {vesting_end.strftime('%Y-%m')}."
+                    ),
+                    "portfolio_relevant": False,
+                    "portfolio_companies": [],
+                }
+                signals.append(sig)
+                vesting_found += 1
+
         elif pre_window <= today < vesting_start:
-            sig = {
-                "id": _make_id("vesting_approaching", name, month),
-                "category": "Founder",
-                "signal_type": "Founder vesting complete",
-                "priority": "High",
-                "status": "active",
-                "title": f"{founders} ({name}) — vesting window approaching in <3 months",
-                "entity": name,
-                "why_it_matters": "Vesting window opens soon — get ahead of the curve",
-                "action": "Start building relationship now — before vesting hits",
-                "source_url": "",
-                "source_name": "Database",
-                "source_detail": f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv",
-                "disclaimer": vesting_disclaimer,
-                "detected_at": _now_iso(),
-                "date_of_event": acq_date_str,
-                "notes": (
-                    f"{vesting_db_note} "
-                    f"Vesting window opens {vesting_start.strftime('%Y-%m')}."
-                ),
-                "portfolio_relevant": False,
-                "portfolio_companies": [],
-            }
-            signals.append(sig)
-            vesting_found += 1
+            li = _proxycurl_check(linkedin_url, acquirer)
+            if li["status"] == "suppressed":
+                log(f"  Suppressed: {founders} ({name}) — {li['linkedin_note']}")
+                suppressed_count += 1
+            else:
+                priority = li["priority_override"] or "Medium"
+                # Approaching window: cap at High even if LinkedIn says Critical
+                if priority == "Critical":
+                    priority = "High"
+                disclaimer = li["linkedin_note"] if li["verified"] else (
+                    li["linkedin_note"] or
+                    "⚠️ Verify on LinkedIn before acting — founder may be actively employed or not planning a new venture."
+                )
+                source_detail = (
+                    f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv"
+                    + (" + LinkedIn verification via Proxycurl" if li["verified"] else "")
+                )
+                sig = {
+                    "id": _make_id("vesting_approaching", name, month),
+                    "category": "Founder",
+                    "signal_type": "Founder vesting complete",
+                    "priority": priority,
+                    "status": "active",
+                    "title": f"{founders} ({name}) — vesting window approaching in <3 months",
+                    "entity": name,
+                    "why_it_matters": "Vesting window opens soon — get ahead of the curve",
+                    "action": "Start building relationship now — before vesting hits",
+                    "source_url": "",
+                    "source_name": "Database + LinkedIn" if li["verified"] else "Database",
+                    "source_detail": source_detail,
+                    "disclaimer": disclaimer,
+                    "linkedin_url": li["linkedin_url"],
+                    "linkedin_verified": li["verified"],
+                    "linkedin_current_title": li["current_title"],
+                    "linkedin_current_company": li["current_company"],
+                    "detected_at": _now_iso(),
+                    "date_of_event": acq_date_str,
+                    "notes": (
+                        f"{vesting_db_note} "
+                        f"Vesting window opens {vesting_start.strftime('%Y-%m')}."
+                    ),
+                    "portfolio_relevant": False,
+                    "portfolio_companies": [],
+                }
+                signals.append(sig)
+                vesting_found += 1
 
         # CALCULATION C: Serial founder 4-year mark (3.5-4.5 years post-acq)
         four_yr_start = acq_date + timedelta(days=int(3.5 * 365))
         four_yr_end = acq_date + timedelta(days=int(4.5 * 365))
         if four_yr_start <= today <= four_yr_end:
-            sig = {
-                "id": _make_id("serial_founder_4yr", name, month),
-                "category": "Founder",
-                "signal_type": "Serial founder's last company crosses 4-year mark",
-                "priority": "High",
-                "status": "active",
-                "title": f"{founders} — 4 years post-{acquirer} acquisition",
-                "entity": name,
-                "why_it_matters": "Serial founders typically start next company after 4 years at acquirer — pattern signal",
-                "action": "Proactive outreach — be first call when they're ready",
-                "source_url": "",
-                "source_name": "Database",
-                "source_detail": f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv",
-                "disclaimer": vesting_disclaimer,
-                "detected_at": _now_iso(),
-                "date_of_event": acq_date_str,
-                "notes": vesting_db_note,
-                "portfolio_relevant": False,
-                "portfolio_companies": [],
-            }
-            signals.append(sig)
+            li = _proxycurl_check(linkedin_url, acquirer)
+            if li["status"] == "suppressed":
+                suppressed_count += 1
+            else:
+                priority = li["priority_override"] or "Medium"
+                source_detail = (
+                    f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv"
+                    + (" + LinkedIn verification via Proxycurl" if li["verified"] else "")
+                )
+                sig = {
+                    "id": _make_id("serial_founder_4yr", name, month),
+                    "category": "Founder",
+                    "signal_type": "Serial founder's last company crosses 4-year mark",
+                    "priority": priority,
+                    "status": "active",
+                    "title": f"{founders} — 4 years post-{acquirer} acquisition",
+                    "entity": name,
+                    "why_it_matters": "Serial founders typically start next company after 4 years at acquirer — pattern signal",
+                    "action": "Proactive outreach — be first call when they're ready",
+                    "source_url": "",
+                    "source_name": "Database + LinkedIn" if li["verified"] else "Database",
+                    "source_detail": source_detail,
+                    "disclaimer": li["linkedin_note"] or "⚠️ Verify on LinkedIn before acting.",
+                    "linkedin_url": li["linkedin_url"],
+                    "linkedin_verified": li["verified"],
+                    "linkedin_current_title": li["current_title"],
+                    "linkedin_current_company": li["current_company"],
+                    "detected_at": _now_iso(),
+                    "date_of_event": acq_date_str,
+                    "notes": vesting_db_note,
+                    "portfolio_relevant": False,
+                    "portfolio_companies": [],
+                }
+                signals.append(sig)
 
         # CALCULATION D: Non-compete expiry (~18 months post-acq)
         nc_start = acq_date + timedelta(days=12 * 30)
         nc_end = acq_date + timedelta(days=24 * 30)
         if nc_start <= today <= nc_end:
-            sig = {
-                "id": _make_id("non_compete", name, month),
-                "category": "Founder",
-                "signal_type": "Founder's non-compete expires",
-                "priority": "High",
-                "status": "active",
-                "title": f"{founders} — non-compete window closing at {name}",
-                "entity": name,
-                "why_it_matters": "Post-acquisition non-competes typically 12-24 months — expiry means founder is legally free to compete",
-                "action": "Reach out as non-compete window closes",
-                "source_url": "",
-                "source_name": "Database",
-                "source_detail": f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv",
-                "disclaimer": vesting_disclaimer,
-                "detected_at": _now_iso(),
-                "date_of_event": acq_date_str,
-                "notes": vesting_db_note,
-                "portfolio_relevant": False,
+            li = _proxycurl_check(linkedin_url, acquirer)
+            if li["status"] == "suppressed":
+                suppressed_count += 1
+            else:
+                priority = li["priority_override"] or "Medium"
+                source_detail = (
+                    f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv"
+                    + (" + LinkedIn verification via Proxycurl" if li["verified"] else "")
+                )
+                sig = {
+                    "id": _make_id("non_compete", name, month),
+                    "category": "Founder",
+                    "signal_type": "Founder's non-compete expires",
+                    "priority": priority,
+                    "status": "active",
+                    "title": f"{founders} — non-compete window closing at {name}",
+                    "entity": name,
+                    "why_it_matters": "Post-acquisition non-competes typically 12-24 months — expiry means founder is legally free to compete",
+                    "action": "Reach out as non-compete window closes",
+                    "source_url": "",
+                    "source_name": "Database + LinkedIn" if li["verified"] else "Database",
+                    "source_detail": source_detail,
+                    "disclaimer": li["linkedin_note"] or "⚠️ Verify on LinkedIn before acting.",
+                    "linkedin_url": li["linkedin_url"],
+                    "linkedin_verified": li["verified"],
+                    "linkedin_current_title": li["current_title"],
+                    "linkedin_current_company": li["current_company"],
+                    "detected_at": _now_iso(),
+                    "date_of_event": acq_date_str,
+                    "notes": vesting_db_note,
+                    "portfolio_relevant": False,
                 "portfolio_companies": [],
             }
             signals.append(sig)
 
-    log(f"Founder vesting: {vesting_found} vesting signals found")
+    log(f"Founder vesting: {vesting_found} signals surfaced, {suppressed_count} suppressed by LinkedIn verification")
 
     # CALCULATION B: Fund quiet periods
     try:
@@ -488,6 +668,15 @@ def detect_database_signals():
         log(f"Competitor funded detector error: {e}")
 
     return signals
+
+
+def _first_linkedin_url(raw):
+    """Extract first LinkedIn URL from a raw string (may contain Name: URL | Name: URL format)."""
+    if not raw or str(raw).lower() in ("nan", "none", ""):
+        return ""
+    # Try to find any linkedin.com URL
+    m = re.search(r"https?://(?:www\.)?linkedin\.com/in/[^\s|,\"']+", str(raw))
+    return m.group(0).rstrip("/.") if m else ""
 
 
 def _find_acquisition_date(company, df):

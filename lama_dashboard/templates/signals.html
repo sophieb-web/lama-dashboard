@@ -123,6 +123,33 @@
     return Math.floor(diff/86400) + ' days ago';
   }
 
+  function _renderLinkedInBadge(sig) {
+    // Only show for Founder category signals
+    if (sig.category !== 'Founder') return '';
+
+    if (sig.linkedin_verified) {
+      const role = [sig.linkedin_current_title, sig.linkedin_current_company]
+        .filter(Boolean).join(' at ');
+      const link = sig.linkedin_url
+        ? ` <a href="${esc(sig.linkedin_url)}" target="_blank" rel="noopener" style="color:#0A66C2;text-decoration:underline">View Profile ↗</a>`
+        : '';
+      return `<div style="display:flex;align-items:center;gap:8px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:7px 10px;font-size:12px;margin-bottom:8px">
+        <span style="color:#0A66C2;font-weight:700">LinkedIn ✓ Verified</span>
+        ${role ? `<span style="color:#1E40AF">·</span><span style="color:#1E40AF">${esc(role)}</span>` : ''}
+        ${link}
+      </div>`;
+    }
+
+    const url = sig.linkedin_url;
+    const linkPart = url
+      ? ` <a href="${esc(url)}" target="_blank" rel="noopener" style="color:#6B7280;text-decoration:underline">LinkedIn ↗</a>`
+      : '';
+    return `<div style="display:flex;align-items:center;gap:8px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;padding:7px 10px;font-size:12px;margin-bottom:8px">
+      <span style="color:#6B7280;font-weight:600">LinkedIn ⚠️ Unverified</span>
+      ${linkPart}
+    </div>`;
+  }
+
   function renderCard(sig) {
     const borderColor = PRIORITY_COLORS[sig.priority] || '#6B7280';
     const bg = CAT_TINTS[sig.category] || '#F9FAFB';
@@ -168,6 +195,7 @@
       ${sig.why_it_matters ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:6px"><span style="font-weight:600;color:var(--text)">Why it matters:</span> ${esc(sig.why_it_matters)}</div>` : ''}
       ${sig.action ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px"><span style="font-weight:600;color:var(--text)">Suggested action:</span> ${esc(sig.action)}</div>` : ''}
       ${portfolioCos ? `<div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text-muted)">Portfolio:</span> ${portfolioCos}</div>` : ''}
+      ${_renderLinkedInBadge(sig)}
       ${sig.disclaimer ? `<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:6px;padding:8px 10px;font-size:12px;color:#92400E;margin-bottom:8px">${esc(sig.disclaimer)}</div>` : ''}
       ${sig.notes ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;font-style:italic">${esc(sig.notes)}</div>` : ''}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
