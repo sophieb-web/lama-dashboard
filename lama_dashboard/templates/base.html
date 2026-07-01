@@ -31,6 +31,10 @@
     <a href="/intelligence" class="{% if active == 'intelligence' %}active{% endif %}">
       <span class="nav-icon">📊</span> Intelligence
     </a>
+    <a href="/signals" class="{% if active == 'signals' %}active{% endif %}" style="position:relative">
+      <span class="nav-icon">📡</span> Signals
+      <span id="signals-nav-badge" style="display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);background:#EF4444;color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:99px;align-items:center;justify-content:center;padding:0 4px"></span>
+    </a>
     <a href="/query" class="{% if active == 'query' %}active{% endif %}">
       <span class="nav-icon">💬</span> Query
     </a>

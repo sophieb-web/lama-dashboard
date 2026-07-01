@@ -4,3 +4,8 @@ numpy==2.4.6
 openpyxl==3.1.5
 anthropic==0.109.2
 gunicorn==23.0.0
+apscheduler
+beautifulsoup4
+requests
+feedparser
+rapidfuzz

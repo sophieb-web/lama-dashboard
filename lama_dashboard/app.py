@@ -179,6 +179,72 @@ def update_page():
     return render_template("update.html")
 
 
+# ─── Signals routes ───────────────────────────────────────────────────────────
+
+@app.route("/signals")
+def signals_page():
+    from datetime import date
+    return render_template("signals.html", today=date.today().strftime("%B %d, %Y"))
+
+
+@app.route("/api/signals")
+def api_signals():
+    import signals_store
+    return jsonify(signals_store.load_signals())
+
+
+@app.route("/api/signals/run", methods=["POST"])
+def api_signals_run():
+    def _run():
+        try:
+            import signal_detector
+            signal_detector.run_all_detectors()
+        except Exception as e:
+            import signals_store
+            signals_store.set_run_status("error", log_lines=[f"Fatal error: {e}"])
+            app.logger.error(f"Signal detector error: {e}", exc_info=True)
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    return jsonify({"status": "started"})
+
+
+@app.route("/api/signals/dismiss/<signal_id>", methods=["POST"])
+def api_signals_dismiss(signal_id):
+    import signals_store
+    signals_store.dismiss_signal(signal_id)
+    return jsonify(signals_store.get_stats())
+
+
+@app.route("/api/signals/save/<signal_id>", methods=["POST"])
+def api_signals_save(signal_id):
+    import signals_store
+    signals_store.save_signal(signal_id)
+    return jsonify(signals_store.get_stats())
+
+
+@app.route("/api/signals/unsave/<signal_id>", methods=["POST"])
+def api_signals_unsave(signal_id):
+    import signals_store
+    signals_store.unsave_signal(signal_id)
+    return jsonify(signals_store.get_stats())
+
+
+@app.route("/api/signals/action/<signal_id>", methods=["POST"])
+def api_signals_action(signal_id):
+    import signals_store
+    data = request.get_json() or {}
+    note = data.get("note", "")
+    signals_store.mark_action_taken(signal_id, note)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/signals/stats")
+def api_signals_stats():
+    import signals_store
+    return jsonify(signals_store.get_stats())
+
+
 # ─── Update Center API ────────────────────────────────────────────────────────
 
 @app.route("/api/staging")

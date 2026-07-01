@@ -7,6 +7,17 @@ _scheduler = None
 _lock = threading.Lock()
 
 
+def _run_signal_detection():
+    """Daily 7am signal detection job."""
+    try:
+        logger.info("Daily signal detection starting")
+        import signal_detector
+        result = signal_detector.run_all_detectors()
+        logger.info(f"Signal detection complete: {result}")
+    except Exception as e:
+        logger.error(f"Signal detection failed: {e}")
+
+
 def _run_scrape_job():
     """Job function called by APScheduler — wraps scraper with lock to prevent overlap."""
     with _lock:
@@ -38,6 +49,14 @@ def start_scheduler():
             id="weekly_scrape",
             replace_existing=True,
             max_instances=1,
+        )
+        _scheduler.add_job(
+            _run_signal_detection,
+            trigger=CronTrigger(hour=7, minute=0, timezone="Asia/Jerusalem"),
+            id="daily_signal_detection",
+            replace_existing=True,
+            max_instances=1,
+            misfire_grace_time=3600,
         )
         _scheduler.start()
         logger.info("APScheduler started — weekly scrape scheduled for Monday 9am Israel time")

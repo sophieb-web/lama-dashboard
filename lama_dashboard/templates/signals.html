@@ -1,0 +1,485 @@
+{% extends "base.html" %}
+{% set active = "signals" %}
+
+{% block page_title %}Signals{% endblock %}
+
+{% block content %}
+<div style="padding:0 0 32px 0">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px">Lama Intelligence Brief — {{ today }}</div>
+      <div id="status-bar" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--text-muted)">Last run: <span id="last-run-label">Never run</span></span>
+        <span style="font-size:13px;color:var(--text-muted)">Next run: <span id="next-run-label">—</span></span>
+        <span id="status-pill" class="signal-status-pill status-idle">IDLE</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button id="btn-run-now" onclick="runNow()" class="signal-btn signal-btn-primary">▶ Run Now</button>
+      <button id="btn-watchlist" onclick="toggleWatchlist()" class="signal-btn signal-btn-secondary">★ Watchlist (<span id="watchlist-count">0</span>)</button>
+    </div>
+  </div>
+
+  <!-- Stats Row -->
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px" id="stats-row">
+    <div class="signal-stat-card" onclick="setFilter('priority','Critical')">
+      <div style="font-size:22px;font-weight:700;color:#EF4444" id="stat-critical">0</div>
+      <div style="font-size:12px;color:var(--text-muted)">🔴 Critical</div>
+    </div>
+    <div class="signal-stat-card" onclick="setFilter('priority','High')">
+      <div style="font-size:22px;font-weight:700;color:#F59E0B" id="stat-high">0</div>
+      <div style="font-size:12px;color:var(--text-muted)">🟡 High</div>
+    </div>
+    <div class="signal-stat-card" onclick="setFilter('priority','Medium')">
+      <div style="font-size:22px;font-weight:700;color:#3B82F6" id="stat-medium">0</div>
+      <div style="font-size:12px;color:var(--text-muted)">🟢 Medium</div>
+    </div>
+    <div class="signal-stat-card" onclick="toggleWatchlist()">
+      <div style="font-size:22px;font-weight:700;color:#8B5CF6" id="stat-watchlist">0</div>
+      <div style="font-size:12px;color:var(--text-muted)">★ Watchlist</div>
+    </div>
+    <div class="signal-stat-card">
+      <div style="font-size:22px;font-weight:700;color:#10B981" id="stat-action-taken">0</div>
+      <div style="font-size:12px;color:var(--text-muted)">✓ Actions Taken</div>
+    </div>
+  </div>
+
+  <!-- Category Filter Bar -->
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px" id="category-filters">
+    <button class="filter-pill active" data-cat="All" onclick="setCatFilter('All')">All <span class="pill-count" id="pill-All"></span></button>
+    <button class="filter-pill" data-cat="Founder" onclick="setCatFilter('Founder')">Founder <span class="pill-count" id="pill-Founder">0</span></button>
+    <button class="filter-pill" data-cat="Investor" onclick="setCatFilter('Investor')">Investor <span class="pill-count" id="pill-Investor">0</span></button>
+    <button class="filter-pill" data-cat="Customer" onclick="setCatFilter('Customer')">Customer <span class="pill-count" id="pill-Customer">0</span></button>
+    <button class="filter-pill" data-cat="AI Transformation" onclick="setCatFilter('AI Transformation')">AI Transformation <span class="pill-count" id="pill-AI Transformation">0</span></button>
+    <button class="filter-pill" data-cat="Market" onclick="setCatFilter('Market')">Market <span class="pill-count" id="pill-Market">0</span></button>
+    <button class="filter-pill" data-cat="Competitive" onclick="setCatFilter('Competitive')">Competitive <span class="pill-count" id="pill-Competitive">0</span></button>
+    <button class="filter-pill" data-cat="Portfolio" onclick="setCatFilter('Portfolio')">Portfolio <span class="pill-count" id="pill-Portfolio">0</span></button>
+  </div>
+
+  <!-- Signal Feed -->
+  <div id="signal-feed"></div>
+
+  <!-- X Monitoring Placeholder -->
+  <div class="signal-card" id="x-placeholder" style="opacity:0.6;border-left:4px solid #3B82F6;background:#F8FAFC">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <span style="font-size:11px;font-weight:700;color:#3B82F6;letter-spacing:.5px">🔵 X MONITORING — COMING SOON</span>
+    </div>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px">When enabled, X signals will monitor:</div>
+    <ul style="font-size:13px;color:var(--text-muted);margin:0 0 8px 16px;line-height:1.8">
+      <li>CISOs and CTOs posting about AI security pain</li>
+      <li>Agentic AI and MCP adoption conversations</li>
+      <li>Israeli cyber founder activity</li>
+      <li>Real-time AI transformation announcements</li>
+    </ul>
+    <div style="font-size:12px;color:var(--text-muted)">Options: X API Basic ($100/mo) · Apify (~$50/mo)</div>
+  </div>
+
+  <!-- Run Log -->
+  <div style="margin-top:24px">
+    <button onclick="toggleRunLog()" style="background:none;border:none;font-size:13px;color:var(--text-muted);cursor:pointer;padding:0;display:flex;align-items:center;gap:6px">
+      <span id="run-log-arrow">▶</span> Last Run Log
+    </button>
+    <div id="run-log" style="display:none;margin-top:10px;background:#1E1E1E;border-radius:8px;padding:16px;font-family:monospace;font-size:12px;color:#D4D4D4;max-height:320px;overflow-y:auto;white-space:pre-wrap" id="run-log-content"></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let _signals = [];
+  let _watchlist = [];
+  let _stats = {};
+  let _runStatus = {};
+  let _catFilter = 'All';
+  let _priorityFilter = null;
+  let _showingWatchlist = false;
+  let _pollInterval = null;
+
+  const PRIORITY_ORDER = {Critical: 0, High: 1, Medium: 2};
+  const PRIORITY_COLORS = {Critical: '#EF4444', High: '#F59E0B', Medium: '#3B82F6'};
+  const CAT_TINTS = {
+    'Founder': '#F5F3FF',
+    'Investor': '#EFF6FF',
+    'Customer': '#F0FDF4',
+    'AI Transformation': '#FFF7ED',
+    'Market': '#F9FAFB',
+    'Competitive': '#FEF2F2',
+    'Portfolio': '#EDE9FE',
+  };
+
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return '';
+    const diff = (Date.now() - new Date(iso)) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff/60) + ' minutes ago';
+    if (diff < 86400) return Math.floor(diff/3600) + ' hours ago';
+    return Math.floor(diff/86400) + ' days ago';
+  }
+
+  function renderCard(sig) {
+    const borderColor = PRIORITY_COLORS[sig.priority] || '#6B7280';
+    const bg = CAT_TINTS[sig.category] || '#F9FAFB';
+    const portfolioBadge = sig.portfolio_relevant
+      ? `<span style="background:#8B5CF6;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;letter-spacing:.5px">PORTFOLIO RELEVANT</span>`
+      : '';
+    const portfolioCos = (sig.portfolio_companies||[]).map(p =>
+      `<span style="background:#EDE9FE;color:#6D28D9;font-size:11px;padding:2px 8px;border-radius:99px">🟣 ${esc(p)}</span>`
+    ).join(' ');
+
+    const isActioned = sig.status === 'action_taken';
+    const isSaved = sig.status === 'saved';
+
+    const saveBtn = isSaved
+      ? `<button onclick="unsaveSignal('${sig.id}')" style="background:#D1FAE5;color:#065F46;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">★ Saved</button>`
+      : `<button onclick="saveSignal('${sig.id}')" class="signal-action-btn">★ Save</button>`;
+
+    const actionBtn = isActioned
+      ? `<span style="font-size:12px;color:#10B981">✓ Action taken: ${esc(sig.action_note||'')}</span>`
+      : `<button onclick="showActionInput('${sig.id}')" class="signal-action-btn">✓ Action Taken</button>`;
+
+    const actionInput = `<div id="action-input-${sig.id}" style="display:none;margin-top:8px;display:none">
+      <input type="text" id="action-note-${sig.id}" placeholder="What action did you take?" style="width:calc(100% - 90px);padding:6px 10px;border:1px solid #D1D5DB;border-radius:6px;font-size:12px">
+      <button onclick="submitAction('${sig.id}')" style="margin-left:6px;background:#10B981;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">Confirm</button>
+    </div>`;
+
+    const fadedStyle = isActioned ? 'opacity:0.55;' : '';
+
+    return `<div class="signal-card" id="card-${sig.id}" style="${fadedStyle}border-left:4px solid ${borderColor};background:${bg}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:11px;font-weight:700;color:${borderColor};letter-spacing:.5px">${esc(sig.priority)}</span>
+          <span style="font-size:11px;color:var(--text-muted)">·</span>
+          <span style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">${esc(sig.category)}</span>
+          <span style="font-size:11px;color:var(--text-muted)">·</span>
+          <span style="font-size:11px;color:var(--text-muted)">${esc(sig.source_name)}</span>
+          <span style="font-size:11px;color:var(--text-muted)">·</span>
+          <span style="font-size:11px;color:var(--text-muted)">${timeAgo(sig.detected_at)}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">${portfolioBadge}</div>
+      </div>
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px;line-height:1.4">${esc(sig.title)}</div>
+      ${sig.why_it_matters ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:6px"><span style="font-weight:600;color:var(--text)">Why it matters:</span> ${esc(sig.why_it_matters)}</div>` : ''}
+      ${sig.action ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px"><span style="font-weight:600;color:var(--text)">Suggested action:</span> ${esc(sig.action)}</div>` : ''}
+      ${portfolioCos ? `<div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text-muted)">Portfolio:</span> ${portfolioCos}</div>` : ''}
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+        ${sig.source_url ? `<a href="${esc(sig.source_url)}" target="_blank" rel="noopener" class="signal-action-btn">🔗 Source</a>` : ''}
+        ${saveBtn}
+        ${actionBtn}
+        <button onclick="dismissSignal('${sig.id}')" class="signal-action-btn" style="margin-left:auto">✕ Dismiss</button>
+      </div>
+      ${actionInput}
+      ${isActioned ? `<div style="margin-top:8px;font-size:12px;color:#10B981">✓ Action taken: ${esc(sig.action_note||'')}</div>` : ''}
+    </div>`;
+  }
+
+  function renderFeed() {
+    const feed = document.getElementById('signal-feed');
+    let list = _showingWatchlist ? _watchlist : _signals.filter(s => s.status === 'active');
+
+    if (_catFilter !== 'All') {
+      list = list.filter(s => s.category === _catFilter);
+    }
+    if (_priorityFilter) {
+      list = list.filter(s => s.priority === _priorityFilter);
+    }
+
+    // Sort: portfolio first within tier, then newest
+    list = list.slice().sort((a, b) => {
+      const pa = PRIORITY_ORDER[a.priority] ?? 2;
+      const pb = PRIORITY_ORDER[b.priority] ?? 2;
+      if (pa !== pb) return pa - pb;
+      if (a.portfolio_relevant !== b.portfolio_relevant) return a.portfolio_relevant ? -1 : 1;
+      return (b.detected_at||'') > (a.detected_at||'') ? 1 : -1;
+    });
+
+    if (list.length === 0) {
+      if (_signals.filter(s => s.status === 'active').length === 0 && !_showingWatchlist) {
+        feed.innerHTML = `<div style="text-align:center;padding:60px 20px">
+          <div style="font-size:32px;margin-bottom:12px">📡</div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:8px">No signals yet.</div>
+          <div style="font-size:14px;color:var(--text-muted);margin-bottom:20px">Click Run Now to scan for market signals,<br>or wait until 7am tomorrow for the automatic daily run.</div>
+          <button onclick="runNow()" class="signal-btn signal-btn-primary" style="font-size:15px;padding:10px 28px">▶ Run Now</button>
+        </div>`;
+      } else {
+        feed.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:14px">
+          No ${_catFilter !== 'All' ? _catFilter : ''} signals today. Try removing the filter to see all signals.
+        </div>`;
+      }
+      return;
+    }
+
+    feed.innerHTML = list.map(renderCard).join('');
+  }
+
+  function updateStats() {
+    document.getElementById('stat-critical').textContent = _stats.critical ?? 0;
+    document.getElementById('stat-high').textContent = _stats.high ?? 0;
+    document.getElementById('stat-medium').textContent = _stats.medium ?? 0;
+    document.getElementById('stat-watchlist').textContent = _stats.watchlist ?? 0;
+    document.getElementById('stat-action-taken').textContent = _stats.action_taken ?? 0;
+    document.getElementById('watchlist-count').textContent = _stats.watchlist ?? 0;
+
+    const byCat = _stats.by_category || {};
+    const totalActive = _stats.total_active ?? 0;
+    document.getElementById('pill-All').textContent = totalActive;
+    ['Founder','Investor','Customer','AI Transformation','Market','Competitive','Portfolio'].forEach(cat => {
+      const el = document.getElementById('pill-' + cat);
+      if (el) el.textContent = byCat[cat] || 0;
+    });
+  }
+
+  function updateRunStatus() {
+    const rs = _runStatus;
+    const pill = document.getElementById('status-pill');
+    const lastEl = document.getElementById('last-run-label');
+    const nextEl = document.getElementById('next-run-label');
+
+    lastEl.textContent = rs.last_run ? timeAgo(rs.last_run) + ' (' + new Date(rs.last_run).toLocaleString() + ')' : 'Never run';
+    nextEl.textContent = rs.next_run ? new Date(rs.next_run).toLocaleString() : '7:00am Israel time daily';
+
+    const status = rs.run_status || 'idle';
+    pill.className = 'signal-status-pill status-' + status;
+    pill.textContent = status.toUpperCase();
+
+    const logEl = document.getElementById('run-log');
+    if (logEl && rs.run_log && rs.run_log.length) {
+      logEl.textContent = rs.run_log.join('\n');
+    }
+  }
+
+  async function loadSignals() {
+    try {
+      const resp = await fetch('/api/signals');
+      const data = await resp.json();
+      _signals = data.signals || [];
+      _watchlist = data.watchlist || [];
+      _stats = {
+        critical: (_signals.filter(s => s.status==='active' && s.priority==='Critical')).length,
+        high: (_signals.filter(s => s.status==='active' && s.priority==='High')).length,
+        medium: (_signals.filter(s => s.status==='active' && s.priority==='Medium')).length,
+        watchlist: (_watchlist||[]).length,
+        action_taken: (data.action_taken||[]).length,
+        by_category: {},
+        total_active: _signals.filter(s => s.status==='active').length,
+      };
+      _signals.filter(s => s.status==='active').forEach(s => {
+        _stats.by_category[s.category] = (_stats.by_category[s.category]||0) + 1;
+      });
+      _runStatus = {
+        last_run: data.last_run,
+        next_run: data.next_run,
+        run_status: data.run_status,
+        run_log: data.run_log,
+      };
+      updateStats();
+      updateRunStatus();
+      renderFeed();
+
+      if (data.run_status === 'running') {
+        if (!_pollInterval) {
+          _pollInterval = setInterval(loadSignals, 3000);
+        }
+      } else {
+        if (_pollInterval) {
+          clearInterval(_pollInterval);
+          _pollInterval = null;
+        }
+      }
+    } catch(e) {
+      console.error('Failed to load signals', e);
+    }
+  }
+
+  async function runNow() {
+    document.getElementById('btn-run-now').disabled = true;
+    document.getElementById('btn-run-now').textContent = 'Running…';
+    try {
+      await fetch('/api/signals/run', {method:'POST'});
+      _pollInterval = setInterval(loadSignals, 3000);
+      loadSignals();
+    } catch(e) {
+      console.error(e);
+      document.getElementById('btn-run-now').disabled = false;
+      document.getElementById('btn-run-now').textContent = '▶ Run Now';
+    }
+  }
+
+  async function dismissSignal(id) {
+    const card = document.getElementById('card-' + id);
+    if (card) { card.style.opacity = '0'; card.style.transition = 'opacity .3s'; setTimeout(() => card.remove(), 300); }
+    _signals = _signals.filter(s => s.id !== id);
+    updateStats();
+    await fetch('/api/signals/dismiss/' + id, {method:'POST'});
+    loadSignals();
+  }
+
+  async function saveSignal(id) {
+    await fetch('/api/signals/save/' + id, {method:'POST'});
+    loadSignals();
+  }
+
+  async function unsaveSignal(id) {
+    await fetch('/api/signals/unsave/' + id, {method:'POST'});
+    loadSignals();
+  }
+
+  function showActionInput(id) {
+    const el = document.getElementById('action-input-' + id);
+    if (el) el.style.display = 'block';
+  }
+
+  async function submitAction(id) {
+    const noteEl = document.getElementById('action-note-' + id);
+    const note = noteEl ? noteEl.value.trim() : '';
+    await fetch('/api/signals/action/' + id, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({note}),
+    });
+    loadSignals();
+  }
+
+  function setCatFilter(cat) {
+    _catFilter = cat;
+    _priorityFilter = null;
+    document.querySelectorAll('.filter-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.cat === cat);
+    });
+    renderFeed();
+  }
+
+  function setFilter(type, value) {
+    if (type === 'priority') {
+      _priorityFilter = _priorityFilter === value ? null : value;
+      _catFilter = 'All';
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      document.querySelector('.filter-pill[data-cat="All"]').classList.add('active');
+    }
+    renderFeed();
+  }
+
+  function toggleWatchlist() {
+    _showingWatchlist = !_showingWatchlist;
+    const btn = document.getElementById('btn-watchlist');
+    btn.style.background = _showingWatchlist ? '#8B5CF6' : '';
+    btn.style.color = _showingWatchlist ? '#fff' : '';
+    renderFeed();
+  }
+
+  function toggleRunLog() {
+    const el = document.getElementById('run-log');
+    const arrow = document.getElementById('run-log-arrow');
+    if (el.style.display === 'none') {
+      el.style.display = 'block';
+      arrow.textContent = '▼';
+    } else {
+      el.style.display = 'none';
+      arrow.textContent = '▶';
+    }
+  }
+
+  // Init
+  loadSignals();
+
+  // Update sidebar badge every 60s
+  setInterval(async () => {
+    try {
+      const r = await fetch('/api/signals/stats');
+      const s = await r.json();
+      const badge = document.getElementById('signals-nav-badge');
+      if (badge) {
+        badge.textContent = s.critical || '';
+        badge.style.display = s.critical > 0 ? 'inline-flex' : 'none';
+      }
+    } catch(e) {}
+  }, 60000);
+</script>
+
+<style>
+  .signal-card {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    transition: box-shadow .2s;
+  }
+  .signal-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,.1); }
+
+  .signal-stat-card {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+    transition: box-shadow .15s;
+  }
+  .signal-stat-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.1); }
+
+  .signal-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .signal-btn:hover { opacity: .85; }
+  .signal-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .signal-btn-primary { background: var(--purple); color: #fff; }
+  .signal-btn-secondary { background: var(--bg-light); color: var(--text); border: 1px solid var(--border); }
+
+  .signal-action-btn {
+    background: var(--bg-light);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background .15s;
+  }
+  .signal-action-btn:hover { background: var(--border); }
+
+  .filter-pill {
+    background: var(--bg-light);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .filter-pill.active { background: var(--purple); color: #fff; border-color: var(--purple); }
+  .filter-pill:hover:not(.active) { background: var(--border); }
+  .pill-count { font-size: 11px; opacity: .75; margin-left: 3px; }
+
+  .signal-status-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 99px;
+    letter-spacing: .5px;
+  }
+  .status-idle { background: #E5E7EB; color: #6B7280; }
+  .status-running { background: #FEF3C7; color: #D97706; animation: pulse 1.5s infinite; }
+  .status-complete { background: #D1FAE5; color: #065F46; }
+  .status-error { background: #FEE2E2; color: #991B1B; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+</style>
+{% endblock %}
