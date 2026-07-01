@@ -352,6 +352,15 @@ def detect_database_signals():
         if not acq_date:
             continue
 
+        acquirer = c.get('acquirer', 'unknown acquirer')
+        vesting_disclaimer = (
+            "⚠️ Verify on LinkedIn before acting — founder may be actively employed or not planning a new venture."
+        )
+        vesting_db_note = (
+            f"Calculated from acquisition date in database — does not account for founder's current "
+            f"employment status. Always verify on LinkedIn first."
+        )
+
         # CALCULATION A: Vesting window (3-4 years post-acquisition)
         vesting_start = acq_date + timedelta(days=3 * 365)
         vesting_end = acq_date + timedelta(days=4 * 365)
@@ -370,9 +379,14 @@ def detect_database_signals():
                 "action": "Reach out to founder before they start taking meetings",
                 "source_url": "",
                 "source_name": "Database",
+                "source_detail": f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv",
+                "disclaimer": vesting_disclaimer,
                 "detected_at": _now_iso(),
                 "date_of_event": acq_date_str,
-                "notes": f"Acquired by {c.get('acquirer', 'unknown')} on {acq_date_str}. Vesting window: {vesting_start.strftime('%Y-%m')} to {vesting_end.strftime('%Y-%m')}",
+                "notes": (
+                    f"{vesting_db_note} "
+                    f"Vesting window: {vesting_start.strftime('%Y-%m')} to {vesting_end.strftime('%Y-%m')}."
+                ),
                 "portfolio_relevant": False,
                 "portfolio_companies": [],
             }
@@ -391,9 +405,14 @@ def detect_database_signals():
                 "action": "Start building relationship now — before vesting hits",
                 "source_url": "",
                 "source_name": "Database",
+                "source_detail": f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv",
+                "disclaimer": vesting_disclaimer,
                 "detected_at": _now_iso(),
                 "date_of_event": acq_date_str,
-                "notes": f"Vesting window opens {vesting_start.strftime('%Y-%m')}",
+                "notes": (
+                    f"{vesting_db_note} "
+                    f"Vesting window opens {vesting_start.strftime('%Y-%m')}."
+                ),
                 "portfolio_relevant": False,
                 "portfolio_companies": [],
             }
@@ -410,15 +429,17 @@ def detect_database_signals():
                 "signal_type": "Serial founder's last company crosses 4-year mark",
                 "priority": "High",
                 "status": "active",
-                "title": f"{founders} — 4 years post-{c.get('acquirer', 'acquisition')} acquisition",
+                "title": f"{founders} — 4 years post-{acquirer} acquisition",
                 "entity": name,
                 "why_it_matters": "Serial founders typically start next company after 4 years at acquirer — pattern signal",
                 "action": "Proactive outreach — be first call when they're ready",
                 "source_url": "",
                 "source_name": "Database",
+                "source_detail": f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv",
+                "disclaimer": vesting_disclaimer,
                 "detected_at": _now_iso(),
                 "date_of_event": acq_date_str,
-                "notes": "",
+                "notes": vesting_db_note,
                 "portfolio_relevant": False,
                 "portfolio_companies": [],
             }
@@ -440,9 +461,11 @@ def detect_database_signals():
                 "action": "Reach out as non-compete window closes",
                 "source_url": "",
                 "source_name": "Database",
+                "source_detail": f"Source: {name} acquired by {acquirer} — Round Date: {acq_date_str} in deals.csv",
+                "disclaimer": vesting_disclaimer,
                 "detected_at": _now_iso(),
                 "date_of_event": acq_date_str,
-                "notes": "",
+                "notes": vesting_db_note,
                 "portfolio_relevant": False,
                 "portfolio_companies": [],
             }
@@ -545,6 +568,10 @@ def _detect_fund_quiet_periods(df, today, month):
     found = 0
     for fund, last_date in fund_last_deal.items():
         months_silent = (today.year - last_date.year) * 12 + (today.month - last_date.month)
+        fund_source_detail = (
+            f"Source: {fund} — most recent lead deal in deals.csv: {last_date.strftime('%B %Y')} "
+            f"({months_silent} months ago)"
+        )
         if months_silent >= 9:
             sig = {
                 "id": _make_id("fund_quiet", fund, month),
@@ -558,9 +585,10 @@ def _detect_fund_quiet_periods(df, today, month):
                 "action": "Build relationship with fund before they re-emerge active",
                 "source_url": "",
                 "source_name": "Database",
+                "source_detail": fund_source_detail,
                 "detected_at": _now_iso(),
                 "date_of_event": last_date.strftime("%Y-%m"),
-                "notes": f"Last deal: {last_date.strftime('%B %Y')}",
+                "notes": f"Last deal as lead investor: {last_date.strftime('%B %Y')}",
                 "portfolio_relevant": False,
                 "portfolio_companies": [],
             }
@@ -579,9 +607,10 @@ def _detect_fund_quiet_periods(df, today, month):
                 "action": "Build relationship with fund before they re-emerge active",
                 "source_url": "",
                 "source_name": "Database",
+                "source_detail": fund_source_detail,
                 "detected_at": _now_iso(),
                 "date_of_event": last_date.strftime("%Y-%m"),
-                "notes": f"Last deal: {last_date.strftime('%B %Y')}",
+                "notes": f"Last deal as lead investor: {last_date.strftime('%B %Y')}",
                 "portfolio_relevant": False,
                 "portfolio_companies": [],
             }
@@ -629,6 +658,7 @@ def _detect_competitor_funded(companies, df, today):
                     "action": f"Alert {portfolio_co} founder immediately — may accelerate hiring or product",
                     "source_url": "",
                     "source_name": "Database",
+                    "source_detail": f"Source: {co_name} — Round Date: {date_str}, Size: {size_str}, Sector: {sector} in deals.csv",
                     "detected_at": _now_iso(),
                     "date_of_event": date_str,
                     "notes": "",

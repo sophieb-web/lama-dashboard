@@ -168,8 +168,15 @@
       ${sig.why_it_matters ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:6px"><span style="font-weight:600;color:var(--text)">Why it matters:</span> ${esc(sig.why_it_matters)}</div>` : ''}
       ${sig.action ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px"><span style="font-weight:600;color:var(--text)">Suggested action:</span> ${esc(sig.action)}</div>` : ''}
       ${portfolioCos ? `<div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--text-muted)">Portfolio:</span> ${portfolioCos}</div>` : ''}
+      ${sig.disclaimer ? `<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:6px;padding:8px 10px;font-size:12px;color:#92400E;margin-bottom:8px">${esc(sig.disclaimer)}</div>` : ''}
+      ${sig.notes ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;font-style:italic">${esc(sig.notes)}</div>` : ''}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
-        ${sig.source_url ? `<a href="${esc(sig.source_url)}" target="_blank" rel="noopener" class="signal-action-btn">🔗 Source</a>` : ''}
+        ${sig.source_url
+          ? `<a href="${esc(sig.source_url)}" target="_blank" rel="noopener" class="signal-action-btn">🔗 Source</a>`
+          : sig.source_detail
+            ? `<span style="font-size:11px;color:var(--text-muted);font-style:italic">🗄️ ${esc(sig.source_detail)}</span>`
+            : ''
+        }
         ${saveBtn}
         ${actionBtn}
         <button onclick="dismissSignal('${sig.id}')" class="signal-action-btn" style="margin-left:auto">✕ Dismiss</button>
