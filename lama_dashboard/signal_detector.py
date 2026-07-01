@@ -222,7 +222,43 @@ def _extract_company_name(text, trigger_kw):
     return ""
 
 
-def detect_rss_signals(known_companies=None):
+def _fuzzy_match_company(name, known_names, threshold=85):
+    """Return (matched_name, score) if name fuzzy-matches any known company, else (None, 0)."""
+    try:
+        from rapidfuzz import process, fuzz
+        result = process.extractOne(name, known_names, scorer=fuzz.token_sort_ratio)
+        if result and result[1] >= threshold:
+            return result[0], result[1]
+    except ImportError:
+        # Fall back to exact substring match
+        name_lower = name.lower()
+        for kn in known_names:
+            if name_lower in kn.lower() or kn.lower() in name_lower:
+                return kn, 90
+    return None, 0
+
+
+def _round_already_known(company_name, article_date_str, db_companies):
+    """Check if a round for this company is already in deals.csv (within ~6 months of article date)."""
+    try:
+        from data_loader import get_raw_df
+        df = get_raw_df()
+        rows = df[df["Company Name"].str.lower() == company_name.lower()]
+        if rows.empty:
+            return False
+        article_date = _parse_date(article_date_str)
+        if not article_date:
+            return False
+        for _, row in rows.iterrows():
+            d = _parse_date(str(row.get("Round Date", "") or ""))
+            if d and abs((d - article_date).days) <= 180:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def detect_rss_signals(known_companies=None, db_companies_list=None):
     try:
         import feedparser
     except ImportError:
@@ -231,6 +267,7 @@ def detect_rss_signals(known_companies=None):
 
     if known_companies is None:
         known_companies = set()
+    known_names_list = list(known_companies)
 
     signals = []
 
@@ -323,28 +360,59 @@ def detect_rss_signals(known_companies=None):
                     found += 1
                     continue
 
-                # GROUP D: Funding round (Israeli or known customer)
-                if _contains_any(text, FUNDING_KW):
-                    is_israeli = _contains_any(text, ISRAEL_KW)
-                    company_words = title.split()[:3]
-                    co_name = " ".join(company_words)
-                    is_known = any(kco.lower() in text for kco in known_companies) if known_companies else False
-                    if is_israeli or is_known:
+                # GROUP D: Funding round — DB-aware (only surface new information)
+                if _contains_any(text, FUNDING_KW) and (
+                        _contains_any(text, ISRAEL_KW) or _contains_any(text, CYBER_KW)):
+                    co_name = _extract_company_name(title, FUNDING_KW) or " ".join(title.split()[:4])
+                    matched_name, score = _fuzzy_match_company(co_name, known_names_list)
+
+                    if matched_name:
+                        # Company is in our DB — check if this round is also already known
+                        if _round_already_known(matched_name, pub, known_companies):
+                            log(f"  Found {co_name} in article — already in DB, round already known — skipping")
+                            continue
+                        else:
+                            # New round for a company we already track — surface it
+                            log(f"  Found {co_name} in article — in DB but round is new — surfacing signal")
+                            sig = {
+                                "id": _make_id("funding_new_round", matched_name, title[:40]),
+                                "category": "Market",
+                                "signal_type": "New round for existing company",
+                                "priority": "High",
+                                "status": "active",
+                                "title": title[:160],
+                                "entity": matched_name,
+                                "why_it_matters": f"{matched_name} is in our database — this round is not yet recorded",
+                                "action": "Update deals.csv with this round via Update Center",
+                                "source_url": url,
+                                "source_name": feed_name,
+                                "detected_at": _now_iso(),
+                                "date_of_event": pub,
+                                "notes": f"Fuzzy match: '{co_name}' → '{matched_name}' (score {score})",
+                                "portfolio_relevant": matched_name in LAMA_PORTFOLIO,
+                                "portfolio_companies": [matched_name] if matched_name in LAMA_PORTFOLIO else [],
+                            }
+                            signals.append(sig)
+                            found += 1
+                            continue
+                    else:
+                        # Company NOT in our DB — this is new intelligence
+                        log(f"  Found {co_name} in article — NOT in DB — new company signal")
                         sig = {
-                            "id": _make_id("funding", feed_name, title[:60]),
-                            "category": "Investor",
-                            "signal_type": "Customer raises funding round",
+                            "id": _make_id("new_company_found", co_name, title[:40]),
+                            "category": "Market",
+                            "signal_type": "New Israeli cyber company found",
                             "priority": "High",
                             "status": "active",
-                            "title": title[:160],
+                            "title": f"New company not in DB: {title[:120]}",
                             "entity": co_name,
-                            "why_it_matters": "Budget expanding significantly — security spend follows",
-                            "action": "Alert relevant portfolio company founders — upsell opportunity",
+                            "why_it_matters": "Company not in our database — potential new deal or blind spot",
+                            "action": "Research and add to deals.csv via Update Center if relevant",
                             "source_url": url,
                             "source_name": feed_name,
                             "detected_at": _now_iso(),
                             "date_of_event": pub,
-                            "notes": "",
+                            "notes": f"Extracted company name: '{co_name}' — no fuzzy match found in deals.csv",
                             "portfolio_relevant": False,
                             "portfolio_companies": [],
                         }
@@ -653,13 +721,6 @@ def detect_database_signals():
 
     log(f"Founder vesting: {vesting_found} signals surfaced, {suppressed_count} suppressed by LinkedIn verification")
 
-    # CALCULATION B: Fund quiet periods
-    try:
-        fund_signals = _detect_fund_quiet_periods(df, today, month)
-        signals.extend(fund_signals)
-    except Exception as e:
-        log(f"Fund quiet period detector error: {e}")
-
     # CALCULATION E: Competitor recently funded
     try:
         comp_signals = _detect_competitor_funded(companies, df, today)
@@ -862,6 +923,153 @@ def _detect_competitor_funded(companies, df, today):
     return signals
 
 
+# ─── Detector 2b: News-based Investor Activity ───────────────────────────────
+
+NEW_FUND_KW = ["closes fund", "new fund", "raises fund", "fund ii", "fund iii", "fund iv",
+               "fund v", "first close", "final close", "venture fund", "new vehicle",
+               "raised a new", "announced a"]
+PARTNER_MOVE_KW = ["joins", "named partner", "promoted to partner", "leaves", "appointed partner",
+                   "new partner at", "general partner"]
+
+# Days without news coverage before we flag a fund as going quiet
+_FUND_QUIET_NEWS_DAYS = 90
+
+
+def detect_investor_signals():
+    """News-based investor signals — no deals.csv involved."""
+    try:
+        import feedparser
+    except ImportError:
+        log("feedparser not installed — skipping investor detector")
+        return []
+
+    signals = []
+    fund_last_seen = {fund: None for fund in ISRAEL_FOCUSED_FUNDS}
+    cutoff_90 = datetime.now() - timedelta(days=90)
+    cutoff_30 = datetime.now() - timedelta(days=30)
+
+    log("Running news-based investor activity monitor...")
+
+    for feed_name, feed_url in RSS_FEEDS:
+        try:
+            feed = feedparser.parse(feed_url)
+            entries = feed.entries or []
+            # Look back 90 days for fund activity tracking
+            for entry in entries:
+                text = _text(entry)
+                title = entry.get("title", "")
+                url = entry.get("link", "")
+                pub_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+                pub_str = entry.get("published", entry.get("updated", ""))
+
+                import calendar
+                if pub_parsed:
+                    pub_ts = calendar.timegm(pub_parsed)
+                    entry_date = datetime.fromtimestamp(pub_ts)
+                else:
+                    entry_date = datetime.now()
+
+                if entry_date < cutoff_90:
+                    continue
+
+                # Track Israeli fund mentions (for quiet period detection)
+                for fund in ISRAEL_FOCUSED_FUNDS:
+                    if fund in text and entry_date > (fund_last_seen[fund] or datetime.min):
+                        fund_last_seen[fund] = entry_date
+
+                # Only process recent (30-day) entries for new signals
+                if entry_date < cutoff_30:
+                    continue
+
+                # GROUP H: New fund announcement
+                if _contains_any(text, NEW_FUND_KW) and _contains_any(text, CYBER_KW):
+                    fund_name = _extract_company_name(title, NEW_FUND_KW) or " ".join(title.split()[:4])
+                    sig = {
+                        "id": _make_id("new_fund", feed_name, title[:60]),
+                        "category": "Investor",
+                        "signal_type": "Fund closes new vehicle",
+                        "priority": "High",
+                        "status": "active",
+                        "title": title[:160],
+                        "entity": fund_name,
+                        "why_it_matters": "Fresh fund = active deployment ahead — reach out for co-investment or LP intro",
+                        "action": "Identify overlap with portfolio sectors and schedule partner meeting",
+                        "source_url": url,
+                        "source_name": feed_name,
+                        "detected_at": _now_iso(),
+                        "date_of_event": pub_str,
+                        "notes": "",
+                        "portfolio_relevant": False,
+                        "portfolio_companies": [],
+                    }
+                    signals.append(sig)
+
+                # GROUP I: Partner movement between funds
+                if _contains_any(text, PARTNER_MOVE_KW):
+                    any_fund = any(f in text for f in ISRAEL_FOCUSED_FUNDS)
+                    any_cyber = _contains_any(text, CYBER_KW)
+                    if any_fund or any_cyber:
+                        person = _extract_company_name(title, PARTNER_MOVE_KW) or title[:60]
+                        sig = {
+                            "id": _make_id("partner_move", feed_name, title[:60]),
+                            "category": "Investor",
+                            "signal_type": "Partner moves between funds",
+                            "priority": "Medium",
+                            "status": "active",
+                            "title": title[:160],
+                            "entity": person,
+                            "why_it_matters": "Partner transitions signal fund strategy shifts — new relationships possible",
+                            "action": "Reach out to new partner early before their deal pipeline is full",
+                            "source_url": url,
+                            "source_name": feed_name,
+                            "detected_at": _now_iso(),
+                            "date_of_event": pub_str,
+                            "notes": "",
+                            "portfolio_relevant": False,
+                            "portfolio_companies": [],
+                        }
+                        signals.append(sig)
+
+        except Exception as e:
+            log(f"Investor detector — {feed_name} error: {e}")
+
+    # Fund quiet period: based on RSS coverage, not deals.csv
+    today = datetime.now()
+    quiet_found = 0
+    for fund, last_seen in fund_last_seen.items():
+        if last_seen is None:
+            # Never seen in news at all — flag as quiet
+            days_silent = 999
+        else:
+            days_silent = (today - last_seen).days
+
+        if days_silent >= _FUND_QUIET_NEWS_DAYS:
+            sig = {
+                "id": _make_id("fund_quiet_news", fund, _month_key()),
+                "category": "Investor",
+                "signal_type": "Fund goes quiet 6+ months",
+                "priority": "High",
+                "status": "active",
+                "title": f"{fund} — no news coverage in {days_silent if days_silent < 900 else '90+'} days",
+                "entity": fund,
+                "why_it_matters": "Likely raising new fund — will re-emerge with fresh capital in 3-6 months",
+                "action": "Build relationship with fund before they re-emerge active",
+                "source_url": "",
+                "source_name": "RSS Monitor",
+                "source_detail": f"Scanned {len(RSS_FEEDS)} RSS feeds over the last 90 days — no mention of {fund} found",
+                "detected_at": _now_iso(),
+                "date_of_event": last_seen.strftime("%Y-%m") if last_seen else "unknown",
+                "notes": f"Last seen in news: {last_seen.strftime('%B %d, %Y') if last_seen else 'never in scanned feeds'}",
+                "portfolio_relevant": False,
+                "portfolio_companies": [],
+            }
+            signals.append(sig)
+            quiet_found += 1
+
+    log(f"Investor monitor: {quiet_found} fund-quiet signals, {len(signals) - quiet_found} other investor signals")
+    return signals
+
+
 # ─── Detector 3: LinkedIn Jobs Monitor ───────────────────────────────────────
 
 def detect_linkedin_signals():
@@ -966,7 +1174,7 @@ def run_all_detectors():
 
     all_signals = []
 
-    # Detector 1: RSS
+    # Detector 1: RSS (DB-aware — only surfaces new information)
     log("Running RSS news monitor...")
     try:
         from data_loader import get_companies
@@ -974,19 +1182,28 @@ def run_all_detectors():
         known_cos = {c["name"] for c in companies}
     except Exception:
         known_cos = set()
+        companies = []
     try:
-        rss_signals = detect_rss_signals(known_cos)
+        rss_signals = detect_rss_signals(known_cos, companies)
         all_signals.extend(rss_signals)
     except Exception as e:
         log(f"RSS detector failed: {e}")
 
-    # Detector 2: Database
+    # Detector 2: Database calculations (vesting, competitor analysis — insights FROM existing data)
     log("Running database calculations...")
     try:
         db_signals = detect_database_signals()
         all_signals.extend(db_signals)
     except Exception as e:
         log(f"Database detector failed: {e}")
+
+    # Detector 2b: News-based investor activity
+    log("Running investor activity monitor...")
+    try:
+        inv_signals = detect_investor_signals()
+        all_signals.extend(inv_signals)
+    except Exception as e:
+        log(f"Investor detector failed: {e}")
 
     # Detector 3: LinkedIn
     try:
