@@ -1,0 +1,687 @@
+═══════════════════════════════════════════════════════════════════════════════
+LAMA PARTNERS — SIGNALS PAGE
+CLAUDE CODE BUILD PROMPT
+June 2026
+═══════════════════════════════════════════════════════════════════════════════
+
+READ THIS ENTIRE PROMPT BEFORE WRITING ANY CODE.
+
+This prompt adds a Signals page to the existing Lama dashboard.
+Do not touch any existing pages or files unless explicitly told to.
+Add new files only. Modify app.py only to add new routes.
+Modify base.html only to add "Signals" to the sidebar navigation.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1: WHAT THIS FEATURE DOES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A proactive market intelligence feed that automatically detects signals
+relevant to Lama Partners — new CISO appointments, founder vesting
+completions, fund activity changes, AI transformation announcements,
+customer hiring surges, competitor moves, and more.
+
+Runs automatically every day at 7am Israel time.
+Roy opens his laptop and sees a prioritized briefing — what happened
+overnight that Lama needs to act on today.
+
+The full flow:
+
+  TRIGGER (7am daily auto OR "Run Now" button)
+       ↓
+  SIGNAL DETECTOR runs — checks all detectable sources:
+  - RSS feeds (news, CISO appointments, AI transformation)
+  - Our own database (founder vesting, fund quiet periods)
+  - LinkedIn Jobs scraping (hiring surges)
+  - Israeli Companies Registrar (new company registrations)
+       ↓
+  SIGNALS WRITTEN to signals.json (all findings, prioritized)
+       ↓
+  SIGNALS PAGE shows prioritized daily briefing
+  (Critical → High → Medium tiers)
+       ↓
+  User can: Dismiss | Save to watchlist | Mark action taken
+       ↓
+  Saved signals persist in signals.json watchlist
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2: NEW FILES TO CREATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Create these new files inside lama_dashboard/:
+
+  signal_detector.py     — all signal detection logic
+  signals_store.py       — read/write signals.json
+  templates/signals.html — Signals page UI
+
+Create this new data file (starts empty):
+  data/signals.json      — stores all signals between sessions
+
+Also read this file which contains the full signal framework:
+  data/Lama_Signal_Framework.csv  — 75 signals across 7 categories
+  (copy this file into lama_dashboard/data/ before building)
+
+Add to requirements.txt if not already present:
+  apscheduler
+  beautifulsoup4
+  requests
+  feedparser
+  rapidfuzz
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 3: SIGNALS.JSON STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{
+  "last_run": "ISO timestamp or null",
+  "next_run": "ISO timestamp (next 7am Israel time)",
+  "run_status": "idle" | "running" | "complete" | "error",
+  "run_log": ["line 1", "line 2", ...],
+  "signals": [
+    {
+      "id": "unique string (category + source + date + entity hashed)",
+      "category": "Founder" | "Investor" | "Customer" | "AI Transformation"
+                  | "Market" | "Competitive" | "Portfolio",
+      "signal_type": "exact name from Lama_Signal_Framework.csv",
+      "priority": "Critical" | "High" | "Medium",
+      "status": "active" | "dismissed" | "saved" | "action_taken",
+      "title": "one line summary — what happened",
+      "entity": "company name or person name this signal is about",
+      "why_it_matters": "one sentence — why this matters for Lama",
+      "action": "one sentence — what Lama should do",
+      "source_url": "URL of article or data source",
+      "source_name": "TechCrunch" | "CTech" | "SecurityWeek" | "Database" | etc,
+      "detected_at": "ISO timestamp",
+      "date_of_event": "ISO timestamp or date string",
+      "notes": "",
+      "portfolio_relevant": true/false,
+      "portfolio_companies": ["Terra", "Capsule"] // which portfolio cos are relevant
+    }
+  ],
+  "watchlist": [...],   // saved signals — persists indefinitely
+  "dismissed": [...],   // dismissed — stored but not shown
+  "action_taken": [...]  // actioned — stored for audit trail
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 4: SIGNAL_DETECTOR.PY — DETAILED SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+signal_detector.py runs all signal detection logic. It is pure Python —
+no AI, no Anthropic API, no charges. Just HTTP requests, RSS parsing,
+and database logic.
+
+Main function: run_all_detectors()
+  - Runs every detector listed below
+  - Each detector returns a list of signal dicts
+  - All signals combined, deduplicated, prioritized
+  - Written to signals.json
+  - Returns summary: {total: N, critical: N, high: N, medium: N}
+
+Wrap every detector in try/except — if one fails, log it and continue.
+Never crash the whole run because one detector fails.
+
+─────────────────────────────────────────────────────────────────────────────
+DETECTOR 1: RSS NEWS MONITOR
+─────────────────────────────────────────────────────────────────────────────
+
+Use feedparser library to parse RSS feeds.
+Check articles published in the last 48 hours only (not older).
+
+Feeds to monitor:
+  TechCrunch Security:  https://techcrunch.com/category/security/feed/
+  SecurityWeek:         https://www.securityweek.com/feed/
+  Globes English:       https://en.globes.co.il/en/rss
+  CTech:                https://www.calcalist.co.il/rss/AID-1522221960.xml
+  Dark Reading:         https://www.darkreading.com/rss.xml
+  Hacker News:          https://news.ycombinator.com/rss (filter for security)
+
+For each article, check against these keyword groups:
+
+GROUP A — CISO APPOINTMENT (Critical priority):
+  Keywords: "appoints", "names", "hires", "welcomes", "joins as"
+  + "CISO", "chief information security officer", "chief security officer"
+  If matched: signal_type = "New CISO appointed"
+  Extract: company name (subject of appointment), CISO name if mentioned
+  why_it_matters: "90-day buying window — biggest tool purchasing decisions
+                   happen in first 90 days of new CISO"
+  action: "Introduce portfolio companies immediately — window closes fast"
+
+GROUP B — AI TRANSFORMATION (Critical priority):
+  Keywords: "AI transformation", "agentic AI", "AI agents", "deploy AI",
+  "MCP", "model context protocol", "AI copilot", "generative AI rollout",
+  "LLM in production", "AI-powered", "Chief AI Officer", "CAITO"
+  + enterprise company context (not a startup announcement)
+  If matched: signal_type = "Company announces AI transformation initiative"
+  Extract: company name, what they announced
+  why_it_matters: "Immediate need for AI security tools — Capsule and Orion
+                   direct opportunity"
+  action: "Reach out within days — budget is being allocated in real time"
+  portfolio_relevant: True
+  portfolio_companies: ["Capsule", "Orion Security"]
+
+GROUP C — MAJOR CYBER INCIDENT (Critical priority):
+  Keywords: "data breach", "ransomware attack", "cyberattack", "hacked",
+  "security incident", "breach confirmed", "exposed records"
+  If matched: signal_type = "Company announces data breach"
+  why_it_matters: "Acute pain — accelerated buying with board pressure"
+  action: "Portfolio company outreach — fastest buying cycle in security"
+
+GROUP D — FUNDING ROUNDS (High priority):
+  Keywords: "raises", "raised", "funding", "series", "seed round",
+  "million", "venture capital", "investment"
+  + Israeli company context OR known customer company context
+  Cross-reference company name against deals.csv customers column
+  If customer match: signal_type = "Customer raises funding round"
+  why_it_matters: "Budget expanding significantly — security spend follows"
+  action: "Alert relevant portfolio company founders — upsell opportunity"
+
+GROUP E — REGULATION (High priority):
+  Keywords: "SEC", "GDPR", "EU AI Act", "NIS2", "cyber regulation",
+  "compliance mandate", "regulatory requirement", "fine", "penalty"
+  If matched: signal_type = "New regulation announced"
+  why_it_matters: "Creates immediate compliance buying urgency"
+  action: "Identify which portfolio companies address this requirement"
+
+GROUP F — ACQUISITION (High priority):
+  Keywords: "acquires", "acquired", "acquisition", "buys", "merger",
+  "deal closes", "takeover"
+  + cybersecurity context
+  Cross-reference against deals.csv to check if Israeli cyber company
+  If matched: signal_type = "Competitor gets acquired" or "Market consolidating"
+  action: "Assess impact on portfolio — does this help or hurt?"
+
+GROUP G — NEW ISRAELI CYBER COMPANY (High priority):
+  Keywords: "Israeli", "Israel", "Tel Aviv" + "cybersecurity", "raises seed",
+  "emerges from stealth", "founded", "new startup"
+  If matched: signal_type = "New entrant in portfolio company's category"
+  Cross-reference against deals.csv — is this company already in database?
+  If not in database: flag as potential new company to add
+
+─────────────────────────────────────────────────────────────────────────────
+DETECTOR 2: DATABASE CALCULATIONS
+─────────────────────────────────────────────────────────────────────────────
+
+Run these calculations against deals.csv. These are the most reliable
+signals because they come from our own verified data.
+
+CALCULATION A — FOUNDER VESTING COMPLETE (Critical priority):
+  For every company in deals.csv where Acquired? == "Yes":
+    Parse the Round Date of the acquisition round (or use Notes field)
+    Calculate: acquisition_date + 3 years = vesting_start_window
+    Calculate: acquisition_date + 4 years = vesting_end_window
+    If today is within that window:
+      signal_type = "Founder vesting complete"
+      title = f"{founders} ({company}) — vesting window open"
+      why_it_matters = "Founder likely free from vesting and considering
+                        next company — prime time to build relationship"
+      action = "Reach out to founder before they start taking meetings"
+      priority = "Critical"
+    If today is within 3 months of window opening:
+      Same signal but priority = "High" (heads up — approaching)
+
+CALCULATION B — FUND QUIET PERIOD (High priority):
+  For each unique investor that appears in Lead Investor column:
+    Find all deals where they appear as Lead Investor
+    Find the most recent deal date
+    Calculate months since most recent deal
+    If months >= 6:
+      signal_type = "Fund goes quiet 6+ months"
+      title = f"{fund_name} — no new deals in {months} months"
+      why_it_matters = "Likely raising new fund — will re-emerge with
+                        fresh capital in 3-6 months"
+      action = "Build relationship with fund before they re-emerge active"
+      priority = "High"
+    If months >= 9:
+      priority = "Critical" — they are definitely raising
+
+CALCULATION C — SERIAL FOUNDER 4-YEAR MARK (High priority):
+  For every company where Acquired? == "Yes" and Founders is not empty:
+    If acquisition was exactly 3.5-4.5 years ago:
+      signal_type = "Serial founder's last company crosses 4-year mark"
+      title = f"{founders} — 4 years post-{acquirer} acquisition"
+      why_it_matters = "Serial founders typically start next company after
+                        4 years at acquirer — pattern signal"
+      action = "Proactive outreach — be first call when they're ready"
+      priority = "High"
+
+CALCULATION D — NON-COMPETE EXPIRY (High priority):
+  Same logic as above but at 18 months post-acquisition
+  signal_type = "Founder's non-compete expires"
+  title = f"{founders} — non-compete window closing at {company}"
+  why_it_matters = "Post-acquisition non-competes typically 12-24 months
+                    — expiry means founder is legally free to compete"
+  action = "Reach out as non-compete window closes"
+  priority = "High"
+
+CALCULATION E — COMPETITOR RECENTLY FUNDED (High priority):
+  For Lama portfolio companies (Terra, Orion Security, Root, Capsule, Jit):
+    Identify their sector tag from deals.csv
+    Find all other companies in the same sector
+    Find any that have a round date in the last 30 days
+    signal_type = "Competitor to portfolio company raises big round"
+    title = f"{competitor} raises {amount} in {portfolio_company}'s sector"
+    why_it_matters = "Direct competitive threat — competitor now has runway"
+    action = "Alert founder immediately — may accelerate hiring or product"
+    priority = "Critical"
+    portfolio_relevant = True
+    portfolio_companies = [the relevant portfolio company]
+
+─────────────────────────────────────────────────────────────────────────────
+DETECTOR 3: LINKEDIN JOBS MONITOR
+─────────────────────────────────────────────────────────────────────────────
+
+Scrape LinkedIn Jobs search results for security hiring surges.
+Note: LinkedIn blocks scrapers aggressively. Use these strategies:
+  - Rotate User-Agent headers
+  - Add 3-5 second delays between requests
+  - Use requests-html or playwright if basic requests fails
+  - If blocked completely: log the failure and skip gracefully
+
+Search URLs to check:
+  Security roles surge:
+  https://www.linkedin.com/jobs/search/?keywords=CISO&location=&f_TPR=r604800
+  (f_TPR=r604800 = posted in last 7 days)
+
+  Also check:
+  https://www.linkedin.com/jobs/search/?keywords=chief+information+security+officer&f_TPR=r604800
+
+For each job posting found:
+  Extract: company name, job title, location, posted date
+  If job title contains CISO / Chief Security Officer / Chief Information Security Officer:
+    signal_type = "New CISO appointed" (or "CISO role open — buying window coming")
+    Cross-reference company against deals.csv customers column
+    If customer match: priority = "Critical"
+    Else: priority = "High"
+
+For hiring surge detection:
+  This requires checking a specific company's job postings count
+  Build a secondary function: check_company_hiring_surge(company_name)
+    - Search LinkedIn Jobs for company_name + security
+    - If 5+ security job postings found: flag as hiring surge
+  Run this function for the top 50 companies in deals.csv by total raised
+  (most likely to have visible LinkedIn job postings)
+
+If LinkedIn scraping is completely blocked:
+  Log: "LinkedIn scraping blocked — skipping jobs detector"
+  Continue with other detectors
+  Do NOT crash
+
+─────────────────────────────────────────────────────────────────────────────
+DETECTOR 4: X MONITORING (PLACEHOLDER — NOT YET ACTIVE)
+─────────────────────────────────────────────────────────────────────────────
+
+This detector is a placeholder for future X/Twitter monitoring.
+Build the function stub but do not connect it to any real scraping yet.
+
+def detect_x_signals():
+    '''
+    X monitoring not yet active.
+    Future implementation will monitor:
+    - CISO/CTO posts about AI security pain
+    - Agentic AI deployment announcements
+    - MCP adoption conversations
+    - Israeli cyber founder activity
+
+    Options being evaluated:
+    - X API Basic ($100/month) — fully automated
+    - Apify X scraper (~$50/month) — managed scraping
+    - RSS Bridge — self-hosted, free but unreliable
+
+    Returns empty list until implementation is added.
+    '''
+    log("X monitoring not yet active — skipping")
+    return []
+
+Show on the Signals page UI:
+  A grayed-out card labeled "X Monitoring — Coming Soon"
+  With text: "X signals will appear here once enabled. Monitors CISO/CTO
+  posts about AI security pain, agentic AI deployments, MCP adoption,
+  and Israeli cyber founder activity."
+
+─────────────────────────────────────────────────────────────────────────────
+DEDUPLICATION
+─────────────────────────────────────────────────────────────────────────────
+
+Before adding any signal to signals.json:
+  Check if a signal with the same (signal_type + entity + date_of_event)
+  already exists in signals.json (in any status bucket)
+  If duplicate found: skip it entirely
+
+Also check: if signal was previously dismissed by user, do not re-add it
+  Store dismissed signal IDs in dismissed[] bucket
+  On each run, skip any signal whose ID matches a dismissed ID
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 5: SIGNALS_STORE.PY — DETAILED SPEC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+signals_store.py manages reading and writing signals.json.
+
+Functions:
+  load_signals() → dict
+  save_signals(data) → None
+  add_signals(signal_list) → int  (returns count of new signals added)
+  dismiss_signal(signal_id) → None
+  save_signal(signal_id) → None       (move to watchlist)
+  mark_action_taken(signal_id, note) → None
+  get_active_signals() → list         (status == "active", sorted by priority)
+  get_watchlist() → list              (status == "saved")
+  get_stats() → dict                  (counts by priority and category)
+  get_run_status() → dict             (last_run, next_run, run_status, run_log)
+
+Priority sort order for get_active_signals():
+  Critical first, then High, then Medium
+  Within same priority: newest first (by detected_at)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 6: SCHEDULER INTEGRATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add the signal detector to the existing scheduler.py file.
+Do not replace the existing Monday news scraper — add alongside it.
+
+Add a new job to the BackgroundScheduler:
+  Schedule: Every day at 7:00am Israel time (Asia/Jerusalem timezone)
+  Job: signal_detector.run_all_detectors()
+  Job ID: "daily_signal_detection"
+  Misfire grace time: 1 hour (if Railway restarts, run within 1 hour of 7am)
+
+The scheduler already runs with --workers 1 in gunicorn so no duplicate
+job instances will occur.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 7: SIGNALS PAGE UI — DETAILED SPEC (/signals)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Create templates/signals.html with the following layout.
+Design matches existing dashboard: dark sidebar, white cards, Inter font,
+purple #6B5CF6 accents.
+
+─────────────────────────────────────────────────────────────────────────────
+HEADER
+─────────────────────────────────────────────────────────────────────────────
+Page title: "Signals"
+Subtitle: "Lama Intelligence Brief — [Today's Date]"
+
+Status bar:
+  Last run: [timestamp or "Never run"]
+  Next run: [next 7am Israel time]
+  Status pill: IDLE (gray) | RUNNING (yellow pulse) | COMPLETE (green) | ERROR (red)
+
+Two buttons:
+  [▶ Run Now]       — triggers signal_detector immediately (POST /api/signals/run)
+  [★ Watchlist (N)] — toggles to show watchlist view
+
+─────────────────────────────────────────────────────────────────────────────
+STATS ROW (5 cards)
+─────────────────────────────────────────────────────────────────────────────
+  🔴 Critical: [N]  |  🟡 High: [N]  |  🟢 Medium: [N]  |
+  ★ Watchlist: [N]  |  ✓ Actions Taken: [N]
+
+─────────────────────────────────────────────────────────────────────────────
+CATEGORY FILTER BAR
+─────────────────────────────────────────────────────────────────────────────
+Horizontal filter pills, all active by default:
+  [All] [Founder] [Investor] [Customer] [AI Transformation]
+  [Market] [Competitive] [Portfolio]
+
+Click to filter — active pill is purple, inactive is gray.
+Count badge on each pill showing how many active signals in that category.
+
+─────────────────────────────────────────────────────────────────────────────
+SIGNAL FEED (main content)
+─────────────────────────────────────────────────────────────────────────────
+Signals displayed as cards, sorted Critical → High → Medium.
+Each card:
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ 🔴 CRITICAL  ·  AI TRANSFORMATION  ·  TechCrunch  ·  2 hours ago  │
+  │─────────────────────────────────────────────────────────────────────│
+  │                                                                     │
+  │  Siemens announces deployment of 50,000 AI agents across           │
+  │  manufacturing operations                                           │
+  │                                                                     │
+  │  Why it matters: Capsule direct opportunity — runtime security     │
+  │  for AI agents is the exact use case                               │
+  │                                                                     │
+  │  Suggested action: Founder intro via Siemens Israel office         │
+  │                                                                     │
+  │  Portfolio: 🟣 Capsule  🟣 Orion Security                          │
+  │                                                                     │
+  │  [🔗 Source]  [★ Save]  [✓ Action Taken]  [✕ Dismiss]             │
+  └─────────────────────────────────────────────────────────────────────┘
+
+Card color coding by priority:
+  Critical: red left border (4px solid #EF4444)
+  High:     orange left border (4px solid #F59E0B)
+  Medium:   blue left border (4px solid #3B82F6)
+
+Card color coding by category (subtle background tint):
+  Founder:          very light purple tint
+  Investor:         very light blue tint
+  Customer:         very light green tint
+  AI Transformation: very light orange tint
+  Market:           very light gray tint
+  Competitive:      very light red tint
+  Portfolio:        light purple tint (most prominent — Lama portfolio)
+
+Portfolio-relevant signals:
+  Show purple "PORTFOLIO RELEVANT" badge at top right of card
+  Show which portfolio companies are relevant as purple pills
+  These always appear first within their priority tier
+
+─────────────────────────────────────────────────────────────────────────────
+SIGNAL CARD ACTIONS
+─────────────────────────────────────────────────────────────────────────────
+
+[🔗 Source] — opens source_url in new tab
+
+[★ Save] — saves signal to watchlist
+  POST /api/signals/save/<signal_id>
+  Card moves to watchlist
+  Button changes to "★ Saved" (green)
+
+[✓ Action Taken] — marks signal as actioned
+  Click opens a small inline text input: "What action did you take?"
+  User types note, clicks confirm
+  POST /api/signals/action/<signal_id> with {note: "..."}
+  Card gets green "✓ Action taken: [note]" footer
+  Card moves to bottom of feed (faded)
+
+[✕ Dismiss] — removes signal from feed permanently
+  POST /api/signals/dismiss/<signal_id>
+  Card slides out with animation
+  Signal ID added to dismissed list in signals.json
+  Will not re-appear in future runs
+
+─────────────────────────────────────────────────────────────────────────────
+WATCHLIST VIEW
+─────────────────────────────────────────────────────────────────────────────
+When user clicks "★ Watchlist (N)" button:
+  Main feed replaces with watchlist cards
+  Same card format but with "Remove from watchlist" button instead of Save
+  Watchlist signals never auto-dismiss — they persist until manually removed
+  Show date saved and any action notes
+
+─────────────────────────────────────────────────────────────────────────────
+RUN LOG (collapsible)
+─────────────────────────────────────────────────────────────────────────────
+At bottom of page, collapsible section "Last Run Log"
+Monospace font, dark background (like terminal)
+Shows each detector's output:
+
+  [07:00:01] Starting signal detection — Lama Partners Daily Brief
+  [07:00:02] Running RSS news monitor...
+  [07:00:05] TechCrunch: 20 articles scanned, 3 signals found
+  [07:00:07] SecurityWeek: 10 articles scanned, 1 signal found
+  [07:00:08] Globes English: 8 articles scanned, 0 signals found
+  [07:00:09] Running database calculations...
+  [07:00:09] Founder vesting: checked 28 acquired companies, 2 signals found
+  [07:00:09] Fund quiet periods: checked 45 funds, 1 signal found
+  [07:00:10] Running LinkedIn Jobs monitor...
+  [07:00:13] LinkedIn Jobs: 4 CISO postings found, 1 new signal
+  [07:00:13] X monitor: not yet active — skipping
+  [07:00:13] Deduplication: 2 signals already seen — skipped
+  [07:00:13] Total new signals: 6 (1 Critical, 3 High, 2 Medium)
+  [07:00:13] Done.
+
+─────────────────────────────────────────────────────────────────────────────
+EMPTY STATE
+─────────────────────────────────────────────────────────────────────────────
+If no signals have been detected yet (first time):
+  Show centered message:
+  "No signals yet. Click Run Now to scan for market signals,
+   or wait until 7am tomorrow for the automatic daily run."
+  With a large [▶ Run Now] button
+
+If signals exist but all filtered out by category filter:
+  "No [Category] signals today. Try removing the filter to see all signals."
+
+─────────────────────────────────────────────────────────────────────────────
+X MONITORING PLACEHOLDER CARD
+─────────────────────────────────────────────────────────────────────────────
+At the bottom of the signal feed, always show a grayed-out card:
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ 🔵 X MONITORING — COMING SOON                                      │
+  │─────────────────────────────────────────────────────────────────────│
+  │                                                                     │
+  │  When enabled, X signals will monitor:                             │
+  │  • CISOs and CTOs posting about AI security pain                   │
+  │  • Agentic AI and MCP adoption conversations                       │
+  │  • Israeli cyber founder activity                                   │
+  │  • Real-time AI transformation announcements                       │
+  │                                                                     │
+  │  Options: X API Basic ($100/mo) · Apify (~$50/mo)                 │
+  │                                                                     │
+  └─────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 8: NEW FLASK ROUTES TO ADD IN APP.PY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Add these routes to app.py — do not change any existing routes:
+
+GET  /signals
+     Renders signals.html with current signals data
+
+GET  /api/signals
+     Returns full signals.json as JSON
+     Used by page to poll for run status updates (every 3 seconds while running)
+
+POST /api/signals/run
+     Triggers signal_detector.run_all_detectors() in background thread
+     Returns immediately: {"status": "started"}
+     Page polls /api/signals every 3 seconds to show live log updates
+
+POST /api/signals/dismiss/<signal_id>
+     Moves signal to dismissed bucket
+     Returns updated stats
+
+POST /api/signals/save/<signal_id>
+     Moves signal to watchlist
+     Returns updated stats
+
+POST /api/signals/action/<signal_id>
+     Body: {"note": "what action was taken"}
+     Marks signal as action_taken with note and timestamp
+     Returns updated signal
+
+GET  /api/signals/stats
+     Returns count summary by priority and category
+     Used by the sidebar to show badge count of active Critical signals
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 9: SIDEBAR UPDATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+In base.html, add "Signals" to the sidebar navigation.
+Position it between "Intelligence" and "Update" in the nav order.
+
+Show a red badge on the Signals nav item with the count of active
+Critical signals. If 0 Critical signals, show no badge.
+Badge updates every 60 seconds via a small JS fetch to /api/signals/stats.
+
+Example:
+  Signals  🔴 3
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 10: IMPORTANT NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Signal detection uses zero AI. No Anthropic API calls. No charges.
+  All detection is keyword matching, RSS parsing, and database logic.
+
+- signals.json is committed to GitHub as part of the daily push from
+  the Update Center. This means signal state persists across Railway
+  redeploys.
+
+- The Lama portfolio companies (Terra, Orion Security, Root, Capsule,
+  Jit) must always be checked for relevance in every signal. If a
+  signal is relevant to a portfolio company, flag it and surface it
+  first regardless of priority tier.
+
+- Dismissed signals are stored permanently in dismissed[] and never
+  re-surfaced. This prevents Roy from seeing the same signal twice.
+
+- The database calculations (vesting, fund quiet, etc.) run on every
+  detection cycle. They may produce the same signals repeatedly.
+  Deduplication by (signal_type + entity + month) prevents this —
+  vesting signals appear once per month maximum.
+
+- LinkedIn Jobs scraping will likely be blocked. Build it to fail
+  gracefully — log the failure, skip, and continue with other detectors.
+  The page should not show an error if LinkedIn fails.
+
+- Globes English (en.globes.co.il/en/rss) is the most important Israeli
+  source for local cyber news. It often breaks Israeli cyber stories
+  12-24 hours before TechCrunch picks them up.
+
+- The run log should be detailed enough that Roy can see exactly what
+  was checked and why each signal was or wasn't generated. Transparency
+  builds trust in the system.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 11: BUILD ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Build in this exact order:
+
+1. signals_store.py + data/signals.json (empty)
+   Test: import signals_store; signals_store.get_stats() returns zeros
+
+2. signal_detector.py — database calculations only (Detector 2)
+   Test: python signal_detector.py → prints vesting and fund signals
+   This should work immediately with existing data
+
+3. signal_detector.py — add RSS news monitor (Detector 1)
+   Test: run detector, confirm articles are being parsed from feeds
+
+4. signal_detector.py — add LinkedIn Jobs (Detector 3)
+   Test: run detector, confirm it fails gracefully if blocked
+
+5. Add X placeholder (Detector 4) — stub only, returns []
+
+6. GET /signals route + signals.html (empty state)
+   Test: page loads, shows empty state correctly
+
+7. POST /api/signals/run route + polling
+   Test: click Run Now → status changes → signals appear in feed
+
+8. Signal card actions (dismiss, save, action taken)
+   Test: each button works, signals move between buckets correctly
+
+9. Watchlist view
+   Test: saved signals appear in watchlist, persist after page refresh
+
+10. Scheduler integration — add daily 7am job
+    Test: verify scheduler starts without errors on app launch
+
+11. Sidebar badge
+    Test: Critical signal count shows correctly in nav
+
+12. Polish: animations, empty states, error states, run log formatting
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF PROMPT
+═══════════════════════════════════════════════════════════════════════════════

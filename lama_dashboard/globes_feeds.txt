@@ -1,0 +1,31 @@
+STATUS:200 https://en.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1725
+  VALID RSS | channel: News - Globes | 93 items
+    [Thu, 18 Jun 2026] Israel cuts ties with EU’s top diplomat
+      Minister of Foreign Affairs Gideon Sa'ar announced today that Israel is immediat
+    [Thu, 18 Jun 2026] BP, Socar, NewMed to begin Israel gas exploration
+      The consortium won exploration rights in the block in October 2023, but due to t
+    [Thu, 18 Jun 2026] Dream Security raises $260m at $3b valuation
+      Founded by former NSO CEO Shalev Hulio and former Austrian Chancellor Sebastian
+    [Thu, 18 Jun 2026] Next Vision founders sell shares for $200m
+      Over the past year the founders of the Israeli stabilized camera manufacturer ha
+    [Thu, 18 Jun 2026] After stock surges 500%, Tower more valuable than Hapoalim
+      20 years after the chipmaker negotiated a debt settlement with Israel&rsquo;s bi
+
+STATUS:200 https://en.globes.co.il/WebService/Rss/RssFeeder.asmx/FeederNode?iID=942
+  VALID RSS | channel: Front - Globes | 10 items
+    [Thu, 18 Jun 2026] Dream Security raises $260m at $3b valuation
+      Founded by former NSO CEO Shalev Hulio and former Austrian Chancellor Sebastian
+    [Thu, 18 Jun 2026] After stock surges 500%, Tower more valuable than Hapoalim
+      20 years after the chipmaker negotiated a debt settlement with Israel&rsquo;s bi
+    [Thu, 18 Jun 2026] BP, Socar, NewMed to begin Israel gas exploration
+      The consortium won exploration rights in the block in October 2023, but due to t
+    [Thu, 18 Jun 2026] Israel cuts ties with EU’s top diplomat
+      Minister of Foreign Affairs Gideon Sa'ar announced today that Israel is immediat
+    [Thu, 18 Jun 2026] El Al to settle lawsuit from 2000 for NIS 60m
+      The class action alleges that El Al was part of a global cartel fixing cargo pri
+
+STATUS:200 https://en.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1724
+  VALID RSS | channel: ? | 0 items
+
+STATUS:200 https://en.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=4111
+  VALID RSS | channel: ? | 0 items
