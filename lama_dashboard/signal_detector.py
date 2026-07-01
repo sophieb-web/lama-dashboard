@@ -502,6 +502,25 @@ def _parse_date(date_str):
     return None
 
 
+GLOBAL_TIER1_FUNDS = {
+    "sequoia capital", "bessemer venture partners", "lightspeed venture partners",
+    "accel", "general catalyst", "insight partners", "index ventures",
+    "greylock partners", "greylock", "andreessen horowitz", "a16z",
+    "tiger global", "coatue", "softbank", "google ventures", "gv",
+    "salesforce ventures", "microsoft m12", "m12", "battery ventures",
+    "crv", "kleiner perkins", "mayfield fund", "warburg pincus",
+    "goldman sachs", "jp morgan", "jpmorgan",
+}
+
+ISRAEL_FOCUSED_FUNDS = {
+    "cyberstarts", "yl ventures", "glilot capital", "glilot capital partners",
+    "team8", "team 8", "jerusalem venture partners", "jvp",
+    "tlv partners", "viola ventures", "viola", "merlin ventures",
+    "cerca partners", "awz ventures", "f2 venture capital",
+    "s capital", "blumberg capital",
+}
+
+
 def _detect_fund_quiet_periods(df, today, month):
     signals = []
     fund_last_deal = {}
@@ -509,6 +528,12 @@ def _detect_fund_quiet_periods(df, today, month):
     for _, row in df.iterrows():
         lead = str(row.get("Lead Investor", "") or "").strip()
         if not lead or lead.lower() in ("nan", ""):
+            continue
+        # Skip global tier-1 funds — active globally, quiet in Israeli DB means nothing
+        if lead.lower() in GLOBAL_TIER1_FUNDS:
+            continue
+        # Only flag Israel-focused funds where quiet period in our DB is meaningful
+        if lead.lower() not in ISRAEL_FOCUSED_FUNDS:
             continue
         date_str = str(row.get("Round Date", "") or "").strip()
         d = _parse_date(date_str)
